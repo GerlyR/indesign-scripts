@@ -166,8 +166,8 @@
           var sign = story.paragraphs[story.paragraphs.length - 1];
           if (sign && sign.isValid) {
             sign.justification = Justification.RIGHT_ALIGN;
-            // Подпись: курсив (не пж+курсив)
-            applyCharStyleToPara(sign, CS_ITALIC, fontInfo.italic);
+            // Подпись: пж+курсив
+            applyCharStyleToPara(sign, CS_BOLDIT, fontInfo.boldItalic);
           }
         } catch (e) {}
       }

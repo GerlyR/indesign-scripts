@@ -241,7 +241,7 @@
           var sigPara = paras[si];
           if (sigPara && sigPara.isValid) {
             try { sigPara.justification = Justification.RIGHT_ALIGN; } catch (e) {}
-            applyCharStyleToPara(sigPara, CS_TVITALIC, fontInfo.italic);
+            applyCharStyleToPara(sigPara, CS_TVBOLDIT, fontInfo.boldItalic);
           }
         } catch (e) {}
       }

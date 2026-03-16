@@ -16,11 +16,38 @@
     return;
   }
 
-  // Алиас для удобства
-  function applyCharStyleToPara(para, charStyle, fontStyleName) {
-    Utils.applyCharStyleToPara(para, charStyle, fontStyleName);
+  // --- Регулярные выражения ---
+  var RE_RUBRIKA = /^футбол\./i;
+  var RE_GROUP = /^\s*Группа\s+[A-ZА-ЯЁ]\s*$/i;
+  // Лейблы: Гол/Голы, Предупреждения, Удаления, Судья
+  var RE_LABEL = /^(Голы?|Предупреждения|Удаления|Судья)\s*:/i;
+  var RE_AFTER = /^После\s+матча$/i;
+  var RE_INTERVIEW_LINE_END = /:\s*$/;
+  // Примечание в скобках: (Окончание. Начало на 1-й стр.)
+  var RE_PAREN_NOTE = /^\(\s*[^)]+\)\s*\.?\s*$/;
+  // Вопрос журналиста: начинается с тире, заканчивается на ?
+  var RE_QUESTION = /^\s*[-\u2013\u2014]\s+.*\?\s*$/;
+
+  var story = Utils.getTargetStory(doc);
+  if (!story) {
+    alert("Не найдена текстовая история для обработки.");
+    return;
   }
 
+  // Сброс глобального состояния от предыдущего запуска
+  if ($.global) $.global.lastTeams = null;
+
+  var fontInfo = Utils.detectFontVariants(story);
+  var CS_BOLD = Utils.ensureCharStyleSmart(doc, "пж", fontInfo.bold);
+  var CS_ITALIC = Utils.ensureCharStyleSmart(doc, "tvitalic", fontInfo.italic);
+  var CS_BOLDIT = Utils.ensureCharStyleSmart(doc, "tvbolditalic", fontInfo.boldItalic);
+
+  if (!CS_BOLD) {
+    alert("Не удалось создать символьный стиль для жирного текста.");
+    return;
+  }
+
+  // --- Хелперы ---
   function setBoldRange(range) {
     if (!range || !range.isValid) return;
     if (CS_BOLD) {
@@ -45,29 +72,10 @@
     } catch (e) {}
   }
 
-  var RE_RUBRIKA = /^футбол\./i;
-  var RE_GROUP = /^\s*Группа\s+[A-ZА-ЯЁ]\s*$/i;
-  var RE_LABEL = /^(Голы|Предупреждения|Судья)\s*:/i;
-  var RE_AFTER = /^После\s+матча$/i;
-  var RE_INTERVIEW_LINE_END = /:\s*$/;
-  var RE_BLOCK_8_8 = /Голы:\s*[\s\S]*?\b(?:зрител(?:я|ей)|зрители\.)\b[^\r]*\r/;
-
-  var story = Utils.getTargetStory(doc);
-  if (!story) {
-    alert("Не найдена текстовая история для обработки.");
-    return;
-  }
-
-  // Сброс глобального состояния от предыдущего запуска
-  if ($.global) $.global.lastTeams = null;
-
-  var fontInfo = Utils.detectFontVariants(story);
-  var CS_BOLD = Utils.ensureCharStyleSmart(doc, "пж", fontInfo.bold);
-  var CS_ITALIC = Utils.ensureCharStyleSmart(doc, "tvitalic", fontInfo.italic);
-
-  if (!CS_BOLD) {
-    alert("Не удалось создать символьный стиль для жирного текста.");
-    return;
+  // Целый абзац жирным (для имён тренеров)
+  function boldEntirePara(par) {
+    if (!par || !par.isValid || par.characters.length === 0) return;
+    Utils.applyCharStyleToPara(par, CS_BOLD, fontInfo.bold);
   }
 
   function applyFootballStyles(story) {
@@ -93,6 +101,7 @@
           try { p0.appliedParagraphStyle = psRubrika; } catch (e) {}
         }
 
+        // --- Заголовок ---
         var zagIdx = hasRubrika ? 1 : 0;
         if (story.paragraphs.length > zagIdx && psZag) {
           try {
@@ -103,74 +112,10 @@
           } catch (e) {}
         }
 
-        var podIdx = zagIdx + 1;
-        var hasPod = false;
-        if (story.paragraphs.length > podIdx && psPodzag) {
-          try {
-            var cand = story.paragraphs[podIdx];
-            if (cand && cand.isValid) {
-              var t = Utils.trim(String(cand.contents));
-              if (t.length > 0 && !/^\s*[-.–«"']/i.test(t) && !/[.?!…]\s*$/.test(t) && t.length <= 140) {
-                try {
-                  cand.appliedParagraphStyle = psPodzag;
-                  hasPod = true;
-                } catch (e) {}
-              }
-            }
-          } catch (e) {}
-        }
-
-        // --- Detect signature from end (1 or 2 lines) ---
-        // Форматы: "Имя ФАМИЛИЯ." или "Имя ФАМИЛИЯ,\nиз Города."
-        Utils.trimTailEmptyParas(story);
-        var sigStartIdx = -1; // первая строка подписи
-        var sigEndIdx = -1;   // последняя строка подписи (может совпадать)
-        var pLen = story.paragraphs.length;
-
-        if (pLen >= 2) {
-          try {
-            var lastTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 1]));
-            var prevTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 2]));
-
-            if (Utils.isSignatureCity(lastTxt) && Utils.isSignature(prevTxt)) {
-              // Двухстрочная: "Имя ФАМИЛИЯ,\nиз Города."
-              sigStartIdx = pLen - 2;
-              sigEndIdx = pLen - 1;
-            } else if (Utils.isSignature(lastTxt)) {
-              // Однострочная: "Имя ФАМИЛИЯ."
-              sigStartIdx = pLen - 1;
-              sigEndIdx = pLen - 1;
-            }
-          } catch (e) {}
-        } else if (pLen === 1) {
-          try {
-            var onlyTxt = Utils.trim(Utils.getParaText(story.paragraphs[0]));
-            if (Utils.isSignature(onlyTxt)) {
-              sigStartIdx = 0;
-              sigEndIdx = 0;
-            }
-          } catch (e) {}
-        }
-
-        // Style signature lines: right-align + italic
-        if (sigStartIdx >= 0) {
-          for (var si = sigStartIdx; si <= sigEndIdx; si++) {
-            try {
-              var sigPara = story.paragraphs[si];
-              if (sigPara && sigPara.isValid) {
-                try { sigPara.justification = Justification.RIGHT_ALIGN; } catch (e) {}
-                applyCharStyleToPara(sigPara, CS_ITALIC, fontInfo.italic);
-              }
-            } catch (e) {}
-          }
-        }
-
-        // sigIdx для пропуска в циклах ниже
-        var sigIdx = sigStartIdx;
-
+        // --- Счёт матча: сканируем первые 6 абзацев после заголовка ---
         var exceptions = Utils.loadTeamExceptions();
         var teamTok = (function() {
-          var parts = ["«([^»]+)»"];
+          var parts = ["\u00AB([^\u00BB]+)\u00BB"];
           if (exceptions && exceptions.length > 0) {
             var alts = [];
             for (var i = 0; i < exceptions.length; i++) {
@@ -184,19 +129,32 @@
           return "(?:" + parts.join("|") + ")";
         })();
 
-        var DASH = "[\\u2013\\u2014\\u2212-]";
+        var DASH = "[-\u2013\u2014\u2212]";
+        var CITY = "(?:\\s*\\([^)]+\\))?";
         var RE_SCORE = new RegExp(
-          "^\\s*" + teamTok + "\\s*" + DASH + "\\s*" + teamTok + "\\s*" + DASH +
+          "^\\s*" + teamTok + CITY + "\\s*" + DASH + "\\s*" + teamTok + CITY + "\\s*" + DASH +
           "\\s*(\\d+):(\\d+)\\s*\\(\\s*(\\d+):(\\d+)\\s*\\)\\s*$",
           "i"
         );
 
-        var matchLineIdx = hasPod ? (zagIdx + 2) : (zagIdx + 1);
-        if (story.paragraphs.length > matchLineIdx) {
+        // Ищем строку счёта сканированием (не по фиксированному индексу!)
+        var scoreIdx = -1;
+        for (var sc = zagIdx + 1; sc < Math.min(zagIdx + 6, story.paragraphs.length); sc++) {
           try {
-            var pMatch = story.paragraphs[matchLineIdx];
+            var scTxt = Utils.trim(String(story.paragraphs[sc].contents).replace(/\r$/, ""));
+            if (RE_SCORE.test(scTxt)) {
+              scoreIdx = sc;
+              break;
+            }
+          } catch (e) {}
+        }
+
+        // Применяем bold к строке счёта и запоминаем команды
+        if (scoreIdx >= 0) {
+          try {
+            var pMatch = story.paragraphs[scoreIdx];
             if (pMatch && pMatch.isValid) {
-              var matchText = Utils.trim(String(pMatch.contents));
+              var matchText = Utils.trim(String(pMatch.contents).replace(/\r$/, ""));
               var m = RE_SCORE.exec(matchText);
               if (m) {
                 try {
@@ -216,118 +174,194 @@
           } catch (e) {}
         }
 
-        Utils.resetFindGrep();
-        try {
-          app.findGrepPreferences.findWhat = RE_BLOCK_8_8.source;
-          var hits = story.findGrep();
-          if (hits && hits.length > 0) {
+        // --- Подзаголовок: всё между заголовком и счётом ---
+        if (scoreIdx > zagIdx + 1 && psPodzag) {
+          for (var pi = zagIdx + 1; pi < scoreIdx; pi++) {
             try {
-              var hit = hits[0];
-              if (hit && hit.isValid) {
-                try {
-                  hit.pointSize = 8;
-                  hit.leading = 8;
-                } catch (e) {}
-              }
-            } catch (e) {}
-          }
-        } catch (e) {}
-        Utils.resetFindGrep();
-
-        if (psSeraya) {
-          for (var i1 = 0; i1 < story.paragraphs.length; i1++) {
-            try {
-              var pG = story.paragraphs[i1];
-              if (pG && pG.isValid) {
-                var groupText = Utils.trim(String(pG.contents));
-                if (RE_GROUP.test(groupText)) {
-                  try { pG.appliedParagraphStyle = psSeraya; } catch (e) {}
+              var cand = story.paragraphs[pi];
+              if (cand && cand.isValid) {
+                var ct = Utils.trim(String(cand.contents).replace(/\r$/, ""));
+                // Подзаголовок: не пустой, не начинается с тире, до 200 символов
+                if (ct.length > 0 && !/^\s*[-\u2013\u2014]/.test(ct) && ct.length <= 200) {
+                  try { cand.appliedParagraphStyle = psPodzag; } catch (e) {}
                 }
               }
             } catch (e) {}
           }
         }
 
+        // --- Detect signature from end (1 or 2 lines) ---
+        Utils.trimTailEmptyParas(story);
+        var sigStartIdx = -1;
+        var sigEndIdx = -1;
+        var pLen = story.paragraphs.length;
+
+        if (pLen >= 2) {
+          try {
+            var lastTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 1]));
+            var prevTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 2]));
+
+            if (Utils.isSignatureCity(lastTxt) && Utils.isSignature(prevTxt)) {
+              sigStartIdx = pLen - 2;
+              sigEndIdx = pLen - 1;
+            } else if (Utils.isSignature(lastTxt)) {
+              sigStartIdx = pLen - 1;
+              sigEndIdx = pLen - 1;
+            }
+          } catch (e) {}
+        } else if (pLen === 1) {
+          try {
+            var onlyTxt = Utils.trim(Utils.getParaText(story.paragraphs[0]));
+            if (Utils.isSignature(onlyTxt)) {
+              sigStartIdx = 0;
+              sigEndIdx = 0;
+            }
+          } catch (e) {}
+        }
+
+        // Подпись → пж+курсив + правое выравнивание
+        if (sigStartIdx >= 0) {
+          for (var si = sigStartIdx; si <= sigEndIdx; si++) {
+            try {
+              var sigPara = story.paragraphs[si];
+              if (sigPara && sigPara.isValid) {
+                try { sigPara.justification = Justification.RIGHT_ALIGN; } catch (e) {}
+                Utils.applyCharStyleToPara(sigPara, CS_BOLDIT, fontInfo.boldItalic);
+              }
+            } catch (e) {}
+          }
+        }
+
+        var sigIdx = sigStartIdx;
         var team1 = ($.global && $.global.lastTeams) ? $.global.lastTeams.team1 : null;
         var team2 = ($.global && $.global.lastTeams) ? $.global.lastTeams.team2 : null;
 
+        // --- Основной цикл по абзацам ---
+        var inAfterMatch = false; // находимся ли после "ПОСЛЕ МАТЧА"
+        var inQuestion = false;   // продолжение многострочного вопроса
+
         for (var i2 = 0; i2 < story.paragraphs.length; i2++) {
-          if (sigStartIdx >= 0 && i2 >= sigStartIdx && i2 <= sigEndIdx) continue; // skip signature
+          if (sigStartIdx >= 0 && i2 >= sigStartIdx && i2 <= sigEndIdx) continue;
           try {
             var par = story.paragraphs[i2];
             if (!par || !par.isValid) continue;
 
-            var txt = Utils.trim(String(par.contents));
+            var txt = Utils.trim(String(par.contents).replace(/\r$/, ""));
+            if (!txt) continue;
 
+            // --- "ПОСЛЕ МАТЧА" → Press стиль ---
+            if (RE_AFTER.test(Utils.normalizeSpaces(txt))) {
+              if (psPress) {
+                try { par.appliedParagraphStyle = psPress; } catch (e) {}
+              }
+              inAfterMatch = true;
+              continue;
+            }
+
+            // --- Группа X → seraya ---
+            if (psSeraya && RE_GROUP.test(txt)) {
+              try { par.appliedParagraphStyle = psSeraya; } catch (e) {}
+              continue;
+            }
+
+            // --- Лейблы: Гол(ы), Предупреждения, Удаления, Судья → bold до двоеточия ---
             if (RE_LABEL.test(txt)) {
               boldLabelBeforeColon(par);
               continue;
             }
 
+            // --- Составы команд: «Команда»: / ЦСКА: → bold до двоеточия ---
             if (team1 || team2) {
               var names = [];
               if (team1) names.push(team1);
               if (team2) names.push(team2);
-
+              var isTeamLine = false;
               for (var k = 0; k < names.length; k++) {
                 var nm = names[k];
                 if (!nm) continue;
-                var re = new RegExp("^\\s*(?:«\\s*" + Utils.escapeRegex(nm) + "\\s*»|" + Utils.escapeRegex(nm) + ")\\s*:");
+                var re = new RegExp("^\\s*(?:\u00AB\\s*" + Utils.escapeRegex(nm) + "\\s*\u00BB(?:\\s*\\([^)]+\\))?|" + Utils.escapeRegex(nm) + ")\\s*:");
                 if (re.test(txt)) {
                   boldLabelBeforeColon(par);
+                  isTeamLine = true;
                   break;
                 }
               }
+              if (isTeamLine) continue;
             }
-          } catch (e) {}
-        }
 
-        if (psPress) {
-          for (var i3 = 0; i3 < story.paragraphs.length; i3++) {
-            try {
-              var pA = story.paragraphs[i3];
-              if (pA && pA.isValid) {
-                var afterText = Utils.trim(Utils.normalizeSpaces(String(pA.contents)));
-                if (RE_AFTER.test(afterText)) {
-                  try { pA.appliedParagraphStyle = psPress; } catch (e) {}
-                }
-              }
-            } catch (e) {}
-          }
-        }
-
-        for (var i4 = 0; i4 < story.paragraphs.length; i4++) {
-          if (sigStartIdx >= 0 && i4 >= sigStartIdx && i4 <= sigEndIdx) continue; // skip signature
-          try {
-            var pq = story.paragraphs[i4];
-            if (!pq || !pq.isValid) continue;
-
-            var line = Utils.normalizeSpaces(String(pq.contents).replace(/\r$/, ""));
-            if (/^\s*[-–—]/.test(line) || !RE_INTERVIEW_LINE_END.test(line) || !/,/.test(line)) {
+            // --- Примечание в скобках: (Окончание. Начало на 1-й стр.) → italic ---
+            if (RE_PAREN_NOTE.test(txt)) {
+              Utils.applyCharStyleToPara(par, CS_ITALIC, fontInfo.italic);
               continue;
             }
 
-            var colon = line.lastIndexOf(":");
-            var comma = line.indexOf(",");
-            if (comma === -1 || colon === -1 || comma > colon) continue;
+            // --- Секция интервью (после "ПОСЛЕ МАТЧА") ---
+            if (inAfterMatch) {
+              // Вопрос журналиста: строка с тире, заканчивается на ?
+              if (RE_QUESTION.test(txt)) {
+                Utils.applyCharStyleToPara(par, CS_BOLDIT, fontInfo.boldItalic);
+                inQuestion = true;
+                continue;
+              }
 
-            try {
-              if (colon < pq.characters.length) {
-                var interviewRng = pq.characters.itemByRange(0, colon);
-                if (interviewRng && interviewRng.isValid) {
-                  setBoldRange(interviewRng);
+              // Продолжение вопроса на след. строке (не начинается с тире, заканчивается на ?)
+              if (inQuestion && !/^\s*[-\u2013\u2014]/.test(txt) && /\?\s*$/.test(txt)) {
+                Utils.applyCharStyleToPara(par, CS_BOLDIT, fontInfo.boldItalic);
+                continue;
+              }
+              inQuestion = false;
+
+              // Имя тренера: "Имя ФАМИЛИЯ, должность «Клуб»:"
+              // Паттерн: содержит запятую, заканчивается на :, НЕ начинается с тире
+              if (RE_INTERVIEW_LINE_END.test(txt) && !/^\s*[-\u2013\u2014]/.test(txt) && /,/.test(txt)) {
+                var colon = txt.lastIndexOf(":");
+                var comma = txt.indexOf(",");
+                if (comma >= 0 && colon >= 0 && comma < colon) {
+                  boldEntirePara(par);
+                  continue;
                 }
               }
-            } catch (e) {}
+            }
+
           } catch (e) {}
         }
+
+        // --- Блок статистики 8/8pt ---
+        // Ищем от строки счёта до строки с "зрител" включительно
+        if (scoreIdx >= 0) {
+          var statsStart = scoreIdx;
+          var statsEnd = -1;
+          for (var st = scoreIdx; st < Math.min(scoreIdx + 20, story.paragraphs.length); st++) {
+            try {
+              var stTxt = String(story.paragraphs[st].contents);
+              if (/зрител/i.test(stTxt)) {
+                statsEnd = st;
+                break;
+              }
+            } catch (e) {}
+          }
+          if (statsEnd >= statsStart) {
+            for (var sb = statsStart; sb <= statsEnd; sb++) {
+              try {
+                var sp = story.paragraphs[sb];
+                if (sp && sp.isValid && sp.characters.length > 0) {
+                  var srng = sp.characters.itemByRange(0, sp.characters.length - 1);
+                  if (srng && srng.isValid) {
+                    try { srng.pointSize = 8; } catch (e) {}
+                    try { srng.leading = 8; } catch (e) {}
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        // --- Ремарки эмоций курсивом ---
+        Utils.applyEmotionRemarks(story, CS_ITALIC);
+
+        Utils.cleanupBroom(story);
+        Utils.applyStandardReplacements(story);
       }
-
-      // --- Ремарки эмоций курсивом: (смеётся), (улыбаясь) и т.п. ---
-      Utils.applyEmotionRemarks(story, CS_ITALIC);
-
-      Utils.cleanupBroom(story);
-      Utils.applyStandardReplacements(story);
     } catch (e) {
       alert("Ошибка при обработке: " + (e.message || String(e)));
     }
