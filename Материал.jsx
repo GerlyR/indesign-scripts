@@ -35,11 +35,9 @@
   var CS_ITALIC = Utils.ensureCharStyleSmart(doc, "tvitalic", fontInfo.italic);
   var CS_BOLDIT = Utils.ensureCharStyleSmart(doc, "tvbolditalic", fontInfo.boldItalic);
 
-  // Алиас для удобства
-  function applyCharStyleToPara(para, charStyle, fontStyleName) {
-    Utils.applyCharStyleToPara(para, charStyle, fontStyleName);
-  }
 
+  app.doScript(function() { _run(); }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "\u041C\u0430\u0442\u0435\u0440\u0438\u0430\u043B");
+  function _run() {
   try {
     Utils.grepChange(story, "\\r\\r+", {changeTo: "\\r"});
 
@@ -117,13 +115,13 @@
     if (firstSub === 2) {
       if (paras.length >= 4) {
         try {
-          applyCharStyleToPara(paras[3], CS_BOLD, fontInfo.bold);
+          Utils.applyCharStyleToPara(paras[3], CS_BOLD, fontInfo.bold);
         } catch (e) {}
       }
     } else {
       if (paras.length >= 3) {
         try {
-          applyCharStyleToPara(paras[2], CS_BOLD, fontInfo.bold);
+          Utils.applyCharStyleToPara(paras[2], CS_BOLD, fontInfo.bold);
         } catch (e) {}
       }
     }
@@ -161,15 +159,17 @@
         }
       } catch (e) {}
 
+      // Стилизуем все абзацы подписи (может быть 2 при двухстрочной подписи с городом)
       if (story.paragraphs.length > 0) {
-        try {
-          var sign = story.paragraphs[story.paragraphs.length - 1];
-          if (sign && sign.isValid) {
-            sign.justification = Justification.RIGHT_ALIGN;
-            // Подпись: пж+курсив
-            applyCharStyleToPara(sign, CS_BOLDIT, fontInfo.boldItalic);
-          }
-        } catch (e) {}
+        for (var sp = baseIdx + 1; sp < story.paragraphs.length; sp++) {
+          try {
+            var sign = story.paragraphs[sp];
+            if (sign && sign.isValid) {
+              sign.justification = Justification.RIGHT_ALIGN;
+              Utils.applyCharStyleToPara(sign, CS_BOLDIT, fontInfo.boldItalic);
+            }
+          } catch (e) {}
+        }
       }
 
       Utils.trimTailEmptyParas(story);
@@ -235,4 +235,5 @@
   } catch (e) {
     alert("Ошибка при обработке: " + (e.message || String(e)));
   }
+  } // end _run
 })();

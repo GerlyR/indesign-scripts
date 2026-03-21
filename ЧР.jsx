@@ -22,7 +22,6 @@
   // Лейблы: Гол/Голы, Предупреждения, Удаления, Судья
   var RE_LABEL = /^(Голы?|Предупреждения|Удаления|Судья)\s*:/i;
   var RE_AFTER = /^После\s+матча$/i;
-  var RE_INTERVIEW_LINE_END = /:\s*$/;
   // Примечание в скобках: (Окончание. Начало на 1-й стр.)
   var RE_PAREN_NOTE = /^\(\s*[^)]+\)\s*\.?\s*$/;
   // Вопрос журналиста: начинается с тире, заканчивается на ?
@@ -101,8 +100,9 @@
           try { p0.appliedParagraphStyle = psRubrika; } catch (e) {}
         }
 
-        // --- Заголовок ---
+        // --- Заголовок (может быть многострочным — все ЗАГЛАВНЫЕ строки) ---
         var zagIdx = hasRubrika ? 1 : 0;
+        var zagEnd = zagIdx; // последний абзац заголовка
         if (story.paragraphs.length > zagIdx && psZag) {
           try {
             var zagPara = story.paragraphs[zagIdx];
@@ -110,6 +110,18 @@
               zagPara.appliedParagraphStyle = psZag;
             }
           } catch (e) {}
+          // Проверяем продолжение заголовка: короткие строки, преимущественно ЗАГЛАВНЫЕ
+          for (var zi = zagIdx + 1; zi < Math.min(zagIdx + 4, story.paragraphs.length); zi++) {
+            try {
+              var zt = Utils.trim(Utils.getParaText(story.paragraphs[zi]));
+              if (zt.length > 0 && zt.length <= 80 && /^[А-ЯЁA-Z\s«»"„"\'\-\u2013\u2014.,!?0-9():]+$/.test(zt)) {
+                story.paragraphs[zi].appliedParagraphStyle = psZag;
+                zagEnd = zi;
+              } else {
+                break;
+              }
+            } catch (e) { break; }
+          }
         }
 
         // --- Счёт матча: сканируем первые 6 абзацев после заголовка ---
@@ -133,13 +145,23 @@
         var CITY = "(?:\\s*\\([^)]+\\))?";
         var RE_SCORE = new RegExp(
           "^\\s*" + teamTok + CITY + "\\s*" + DASH + "\\s*" + teamTok + CITY + "\\s*" + DASH +
-          "\\s*(\\d+):(\\d+)\\s*\\(\\s*(\\d+):(\\d+)\\s*\\)\\s*$",
+          "\\s*(\\d+):(\\d+)(?:\\s*\\([^)]+\\))?\\s*$",
           "i"
         );
 
+        // --- Составы команд: «Команда» (Город): или ЦСКА: ---
+        var teamLineupParts = ["\u00AB[^\u00BB]+\u00BB\\s*(?:\\([^)]+\\)\\s*)?"];
+        if (exceptions && exceptions.length > 0) {
+          for (var ei = 0; ei < exceptions.length; ei++) {
+            var exc = Utils.trim(exceptions[ei]);
+            if (exc) teamLineupParts.push(Utils.escapeRegex(exc));
+          }
+        }
+        var RE_TEAM_LINEUP = new RegExp("^\\s*(?:" + teamLineupParts.join("|") + ")\\s*:", "i");
+
         // Ищем строку счёта сканированием (не по фиксированному индексу!)
         var scoreIdx = -1;
-        for (var sc = zagIdx + 1; sc < Math.min(zagIdx + 6, story.paragraphs.length); sc++) {
+        for (var sc = zagEnd + 1; sc < Math.min(zagEnd + 6, story.paragraphs.length); sc++) {
           try {
             var scTxt = Utils.trim(String(story.paragraphs[sc].contents).replace(/\r$/, ""));
             if (RE_SCORE.test(scTxt)) {
@@ -175,8 +197,8 @@
         }
 
         // --- Подзаголовок: всё между заголовком и счётом ---
-        if (scoreIdx > zagIdx + 1 && psPodzag) {
-          for (var pi = zagIdx + 1; pi < scoreIdx; pi++) {
+        if (scoreIdx > zagEnd + 1 && psPodzag) {
+          for (var pi = zagEnd + 1; pi < scoreIdx; pi++) {
             try {
               var cand = story.paragraphs[pi];
               if (cand && cand.isValid) {
@@ -233,8 +255,6 @@
         }
 
         var sigIdx = sigStartIdx;
-        var team1 = ($.global && $.global.lastTeams) ? $.global.lastTeams.team1 : null;
-        var team2 = ($.global && $.global.lastTeams) ? $.global.lastTeams.team2 : null;
 
         // --- Основной цикл по абзацам ---
         var inAfterMatch = false; // находимся ли после "ПОСЛЕ МАТЧА"
@@ -270,23 +290,11 @@
               continue;
             }
 
-            // --- Составы команд: «Команда»: / ЦСКА: → bold до двоеточия ---
-            if (team1 || team2) {
-              var names = [];
-              if (team1) names.push(team1);
-              if (team2) names.push(team2);
-              var isTeamLine = false;
-              for (var k = 0; k < names.length; k++) {
-                var nm = names[k];
-                if (!nm) continue;
-                var re = new RegExp("^\\s*(?:\u00AB\\s*" + Utils.escapeRegex(nm) + "\\s*\u00BB(?:\\s*\\([^)]+\\))?|" + Utils.escapeRegex(nm) + ")\\s*:");
-                if (re.test(txt)) {
-                  boldLabelBeforeColon(par);
-                  isTeamLine = true;
-                  break;
-                }
-              }
-              if (isTeamLine) continue;
+            // --- Составы команд: «Команда» (Город): → bold до двоеточия ---
+            // Только до секции "ПОСЛЕ МАТЧА", иначе перехватывает «Клуба»: в строке тренера
+            if (!inAfterMatch && RE_TEAM_LINEUP.test(txt)) {
+              boldLabelBeforeColon(par);
+              continue;
             }
 
             // --- Примечание в скобках: (Окончание. Начало на 1-й стр.) → italic ---
@@ -312,11 +320,10 @@
               inQuestion = false;
 
               // Имя тренера: "Имя ФАМИЛИЯ, должность «Клуб»:"
-              // Паттерн: содержит запятую, заканчивается на :, НЕ начинается с тире
-              if (RE_INTERVIEW_LINE_END.test(txt) && !/^\s*[-\u2013\u2014]/.test(txt) && /,/.test(txt)) {
-                var colon = txt.lastIndexOf(":");
-                var comma = txt.indexOf(",");
-                if (comma >= 0 && colon >= 0 && comma < colon) {
+              // Паттерн: НЕ начинается с тире, заканчивается на двоеточие
+              if (!/^\s*[-\u2013\u2014]/.test(txt) && /:\s*$/.test(txt)) {
+                // Содержит запятую (имя, должность) или содержит «» (клуб)
+                if (/,/.test(txt) || /\u00AB/.test(txt)) {
                   boldEntirePara(par);
                   continue;
                 }
@@ -367,8 +374,9 @@
     }
   }
 
-  applyFootballStyles(story);
+  app.doScript(function() {
+    applyFootballStyles(story);
+  }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "\u0427\u0420");
 
-  if (!$.global) $.global = {};
   $.global.applyFootballStyles = applyFootballStyles;
 })();

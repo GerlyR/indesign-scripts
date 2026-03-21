@@ -39,6 +39,8 @@
   var CS_TVITALIC = Utils.ensureCharStyleSmart(doc, "tvitalic", fontInfo.italic);
   var CS_TVBOLDIT = Utils.ensureCharStyleSmart(doc, "tvbolditalic", fontInfo.boldItalic);
 
+  app.doScript(function() { _run(); }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "\u0418\u043D\u0442\u0435\u0440\u0432\u044C\u044E");
+  function _run() {
   try {
     Utils.removeWhitespaceParas(story);
     Utils.collapseBreaks(story);
@@ -272,4 +274,5 @@
   } catch (e) {
     alert("Ошибка при обработке: " + (e.message || String(e)));
   }
+  } // end _run
 })();

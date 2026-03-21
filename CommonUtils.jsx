@@ -458,6 +458,7 @@
     } catch (e) {}
   };
   
+
   /**
    * Схлопывает множественные переносы строк
    */
@@ -653,16 +654,16 @@
    * Проверяет, является ли текст подзаголовком.
    * Подзаголовок: короткий текст (до maxLen символов), не начинается с тире,
    * не заканчивается завершающей пунктуацией предложения.
-   * maxLen по умолчанию 120.
+   * maxLen по умолчанию 200.
    */
   Utils.isSubheader = function(txt, maxLen) {
     var t = Utils.trim(txt);
     if (!t) return false;
-    if (typeof maxLen !== 'number') maxLen = 120;
+    if (typeof maxLen !== 'number') maxLen = 200;
     if (t.length > maxLen) return false;
     if (/^[\s\u00A0]*[\-\u2013\u2014]/.test(t)) return false;
     if (/^\(.*\)\s*\.?\s*$/.test(t)) return false;
-    return !/[.!?\u2026,:;)"\u00BB\u2019\u203A\]\)]\s*$/.test(t);
+    return !/[.!?\u2026,:;)"\u00BB\u2019\u203A\]]\s*$/.test(t);
   };
 
   /**
@@ -885,8 +886,6 @@
     } catch (e) {}
     Utils.resetFindGrep();
   };
-
-    $.global.CommonUtils = Utils;
 
   } catch (e) {
     $.global.CommonUtils = Utils || {};

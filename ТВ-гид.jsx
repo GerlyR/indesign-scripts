@@ -1,5 +1,7 @@
 (function(){
   'use strict';
+  app.doScript(function() { _main(); }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "\u0422\u0412-\u0433\u0438\u0434");
+  function _main() {
 
   var _f = File(File($.fileName).parent.fsName + "/CommonUtils.jsx");
   if (!_f.exists) _f = File(File($.fileName).parent.fsName + "\\CommonUtils.jsx");
@@ -44,7 +46,7 @@
   var teamExceptions = Utils.loadTeamExceptions();
 
   // --- Вспомогательные функции ---
-  var UPPER_CHARS = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  var UPPER_CHARS = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ".toUpperCase();
 
   // Пропуск точек после инициалов: "Б. Иванов", "A. Griezmann"
   function isInitialDot(t, dotPos) {
@@ -257,4 +259,5 @@
   }
 
   Utils.resetFindGrep();
+  } // end _main
 })();
