@@ -25,11 +25,6 @@
     return Utils.grepChange(tgt, findWhat, changeProps);
   }
   
-  function textFindChangeOnTarget(tgt, findWhat, changeTo) {
-    if (!tgt || !findWhat) return null;
-    return Utils.textChange(tgt, findWhat, changeTo);
-  }
-
   var GROUP = "Таб_фут";
   var pBody = Utils.getParaStyleFromGroup(doc, "body_text", GROUP);
   var pStand = Utils.getParaStyleFromGroup(doc, "И В П М О", GROUP);
@@ -46,20 +41,21 @@
     "\\s*(?:\\([A-Za-zА-ЯЁа-яё\\-\\s]+\\))?";
 
   var SCORE = "\\d+\\s*:\\s*\\d+";
-  var HEADER = "^\\s*" + TEAM + "\\s*-\\s*" + TEAM + "\\s*-\\s*" + SCORE;
-  var HEADER_D = "^\\s*" + TEAM + "\\s*-\\s*" + TEAM + "\\s*-\\s*" + SCORE + "\\.";
+  var DASH = "[-\\u2012\\u2013\\u2014]";
+  var HEADER = "^\\s*" + TEAM + "\\s*" + DASH + "\\s*" + TEAM + "\\s*" + DASH + "\\s*" + SCORE;
+  var HEADER_D = "^\\s*" + TEAM + "\\s*" + DASH + "\\s*" + TEAM + "\\s*" + DASH + "\\s*" + SCORE + "\\.";
 
   var STAND_ROW = "(?m)^\\s*И\\s*[ \\t]*В\\s*[ \\t]*Н\\s*[ \\t]*П\\s*[ \\t]*М\\s*[ \\t]*О\\s*$";
   var STAND_BLOCK1 = "(?mis)" + STAND_ROW.replace("(?m)", "") + "[\\s\\S]*?(?=^\\s*Бомбардиры\\s*:)";
   var STAND_BLOCK2 = "(?mis)" + STAND_ROW.replace("(?m)", "") + "[\\s\\S]*$";
+  var RE_NOJOIN = new RegExp("\\r(?!«|(?:" + EXC_ALT + ")\\s*" + DASH + "\\s*)", "g");
 
   function getEightBlockRange(fromTarget) {
     if (!fromTarget) return null;
     
     Utils.resetFindGrep();
     try {
-      app.findGrepPreferences.findWhat = ".";
-      app.findGrepPreferences.appliedCharacterStyle = cBold;
+      app.findGrepPreferences.findWhat = HEADER;
       var hits = fromTarget.findGrep();
       
       if (!hits || !hits.length) {
@@ -67,13 +63,13 @@
         return null;
       }
 
-      var firstBoldChar = hits[0];
-      if (!firstBoldChar || !firstBoldChar.isValid) {
+      var firstHeader = hits[0];
+      if (!firstHeader || !firstHeader.isValid) {
         Utils.resetFindGrep();
         return null;
       }
       
-      var story = firstBoldChar.parentStory;
+      var story = firstHeader.parentStory;
       if (!story || !story.isValid) {
         Utils.resetFindGrep();
         return null;
@@ -99,7 +95,7 @@
       Utils.resetFindGrep();
       
       try {
-        var startIP = firstBoldChar.insertionPoints[0];
+        var startIP = firstHeader.insertionPoints[0];
         if (startIP && endIP) {
           return story.texts.itemByRange(startIP, endIP);
         }
@@ -196,15 +192,19 @@
     try {
       var targetTexts = target.texts;
       if (!targetTexts || targetTexts.length === 0) return;
-      
-      var paras = targetTexts[0].paragraphs;
-      if (!paras) return;
-      
-      for (var i = 3; i < paras.length; i++) {
+
+      for (var tx = 0; tx < targetTexts.length; tx++) {
         try {
-          var para = paras[i];
-          if (para && para.isValid) {
-            para.applyParagraphStyle(pBody, false);
+          var paras = targetTexts[tx].paragraphs;
+          if (!paras) continue;
+
+          for (var i = 3; i < paras.length; i++) {
+            try {
+              var para = paras[i];
+              if (para && para.isValid) {
+                para.applyParagraphStyle(pBody, false);
+              }
+            } catch (e) {}
           }
         } catch (e) {}
       }
@@ -221,7 +221,6 @@
           rng.leading = 8;
         } catch (e) {}
         grepOnTarget(rng, "[ ~S]*~n[ ~S]*", { changeTo: " " });
-        textFindChangeOnTarget(rng, "^n", " ");
         grepOnTarget(rng, "(?: |~S){2,}", { changeTo: " " });
       }
 
@@ -236,7 +235,7 @@
             if (!t || !t.isValid) continue;
             
             var s = String(t.contents);
-            s = s.replace(/\r(?!«|(?:ПСЖ)\s*-\s*|(?:ЦСКА)\s*-\s*)/g, " ");
+            s = s.replace(RE_NOJOIN, " ");
             s = s.replace(/\n/g, " ");
             s = s.replace(/ {2,}/g, " ").replace(/ \./g, ".").replace(/ ,/g, ",");
             t.contents = s;

@@ -87,20 +87,23 @@
   var P_COUNTRY = "(?mi)^\\s*[A-Za-zА-ЯЁа-яё\\-\\s]+\\.\\s*\\d+\\s*[-–]?\\s*й\\s+тур\\b.*$";
   var P_TEAM = "(?:«[^»]+»|" + EXC_ALT + "|[A-Za-zА-Яа-яЁё0-9 .\\-]+)";
   var P_SCORE = "\\d+\\s*:\\s*\\d+";
-  var P_HEADER = "^\\s*" + P_TEAM + "\\s*-\\s*" + P_TEAM + "\\s*-\\s*" + P_SCORE;
+  var P_DASH = "[-\\u2012\\u2013\\u2014]";
+  var P_HEADER = "^\\s*" + P_TEAM + "\\s*" + P_DASH + "\\s*" + P_TEAM + "\\s*" + P_DASH + "\\s*" + P_SCORE;
   var P_HEADERP = P_HEADER + "\\.";
   var P_STANDROW = "(?m)^\\s*И\\s*[ \\t]*В\\s*[ \\t]*Н\\s*[ \\t]*П\\s*[ \\t]*М\\s*[ \\t]*О\\s*$";
   var P_STANDB1 = "(?mis)" + P_STANDROW.replace("(?m)", "") + "[\\s\\S]*?(?=^\\s*Бомбардиры\\s*:)";
   var P_STANDB2 = "(?mis)" + P_STANDROW.replace("(?m)", "") + "[\\s\\S]*$";
 
-  var RE_NOJOIN = new RegExp("\\r(?!«|(?:" + EXC_ALT + ")\\s*-\\s*)", "g");
+  var RE_NOJOIN = new RegExp("\\r(?!«|(?:" + EXC_ALT + ")\\s*" + P_DASH + "\\s*)", "g");
 
   app.doScript(function() {
     try {
       try {
         var targetTexts = target.texts;
         if (targetTexts && targetTexts.length > 0) {
-          targetTexts[0].applyParagraphStyle(pBody, false);
+          for (var tx = 0; tx < targetTexts.length; tx++) {
+            try { targetTexts[tx].applyParagraphStyle(pBody, false); } catch (e) {}
+          }
         }
       } catch (e) {}
       
@@ -151,7 +154,7 @@
             if (!bl || !bl.isValid) continue;
             
             var txt = String(bl.contents);
-            var m = txt.match(/-\s*\d+\s*:\s*\d+\./);
+            var m = txt.match(new RegExp(P_DASH + "\\s*\\d+\\s*:\\s*\\d+\\.", ""));
             if (!m) continue;
             
             var endIdx = txt.indexOf(m[0]) + m[0].length;

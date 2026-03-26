@@ -790,31 +790,65 @@
   };
 
   /**
-   * Создаёт или обновляет символьный стиль с правильным fontStyle.
-   * В отличие от ensureCharStyle, обновляет fontStyle у существующего стиля.
+   * Создаёт символьный стиль под конкретный fontStyle, не перезаписывая общий стиль по имени.
+   * Это защищает уже оформленный текст от побочных изменений при повторном запуске скриптов.
    * @param {Document} doc
-   * @param {string} name — имя стиля
+   * @param {string} name — базовое имя стиля
    * @param {string|null} detectedFontStyle — fontStyle из detectFontVariants
    * @returns {CharacterStyle|null}
    */
   Utils.ensureCharStyleSmart = function(doc, name, detectedFontStyle) {
     if (!doc || !name) return null;
+
+    function getStyle(styleName) {
+      if (!styleName) return null;
+      try {
+        var cs = doc.characterStyles.itemByName(styleName);
+        if (cs && cs.isValid) return cs;
+      } catch (e) {}
+      return null;
+    }
+
+    function makeVariantName(baseName, fontStyle) {
+      if (!fontStyle) return baseName;
+      var token = String(fontStyle)
+        .replace(/[^\w\u0400-\u04FF]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      if (!token) return baseName;
+      return baseName + "__" + token;
+    }
+
+    var baseStyle = getStyle(name);
+    if (!detectedFontStyle) {
+      if (baseStyle) return baseStyle;
+      try {
+        return doc.characterStyles.add({name: name});
+      } catch (e) {
+        return null;
+      }
+    }
+
     try {
-      var cs = doc.characterStyles.itemByName(name);
-      if (cs && cs.isValid) {
-        if (detectedFontStyle) {
-          try { cs.fontStyle = detectedFontStyle; } catch (e) {}
-        }
-        return cs;
+      if (baseStyle && baseStyle.fontStyle === detectedFontStyle) {
+        return baseStyle;
       }
     } catch (e) {}
+
+    var variantName = makeVariantName(name, detectedFontStyle);
+    var variantStyle = getStyle(variantName);
+    if (variantStyle) {
+      try { variantStyle.fontStyle = detectedFontStyle; } catch (e) {}
+      return variantStyle;
+    }
+
     try {
-      var cs2 = doc.characterStyles.add({name: name});
-      if (detectedFontStyle) {
-        try { cs2.fontStyle = detectedFontStyle; } catch (e) {}
-      }
+      var cs2 = doc.characterStyles.add({name: variantName});
+      try { cs2.fontStyle = detectedFontStyle; } catch (e) {}
       return cs2;
-    } catch (e) { return null; }
+    } catch (e) {}
+
+    if (baseStyle) return baseStyle;
+    return null;
   };
 
   /**

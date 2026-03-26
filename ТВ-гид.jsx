@@ -58,7 +58,7 @@
   }
 
   // Регулярка для канала + время: «Матч ТВ», 23:00 или «Матч ТВ» 23:00
-  var RE_CHANNEL_TIME = /^\u00AB[^\u00BB]+\u00BB[,]?\s*\d{1,2}:\d{2}/;
+  var RE_CHANNEL_TIME = /^\u00AB[^\u00BB]+\u00BB[,]?\s*\d{1,2}:\d{2}\s*$/;
 
   // Регулярка для пары команд: «Team» – «Team» или Team — Team
   // Строим динамически с учётом команд-исключений из INI
@@ -73,7 +73,7 @@
   }
   // Сокращение города после команды: «Динамо» Мх, «Динамо» М, «Торпедо» Мск
   var cityAbbr = "(?:\\s+[А-ЯЁ][а-яё]*\\.?)?";
-  var pairRe = new RegExp("^" + teamToken + cityAbbr + "\\s*[\\-\u2013\u2014\u2012]\\s*" + teamToken + cityAbbr);
+  var pairRe = new RegExp("^" + teamToken + cityAbbr + "\\s*[\\-\u2013\u2014\u2012]\\s*" + teamToken + cityAbbr + "\\s*$");
 
   // Определяет, является ли сегмент каналом + временем: «Матч ТВ», 23:00
   function isChannelSegment(trimmed) {
@@ -241,8 +241,6 @@
     Utils.grepChange(stories[s5], "\\(\u00AB[^\u00BB]+\u00BB\\s*[-\u2013\u2014,]\\s*\\d{1,2}:\\d{2}\\)", {appliedCharacterStyle: csItalic});
     // Канал через запятую без скобок: «Матч ТВ», 23:00
     Utils.grepChange(stories[s5], "\u00AB[^\u00BB]+\u00BB,\\s*\\d{1,2}:\\d{2}", {appliedCharacterStyle: csItalic});
-    // Время HH:MM (подстраховка для оставшихся)
-    Utils.grepChange(stories[s5], "\\b\\d{1,2}:\\d{2}\\b", {appliedCharacterStyle: csItalic});
   }
 
   // --- Шаг 7: текстовые замены и очистка ---
