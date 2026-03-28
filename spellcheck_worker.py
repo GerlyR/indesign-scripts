@@ -99,6 +99,18 @@ def is_hyphenation_artifact(word, suggestions):
     return any(joined.lower() == suggestion.lower() for suggestion in suggestions)
 
 
+def is_ne_prefix_split(word, suggestions):
+    """Skip 'не сознательно'→'несознательно' — Yandex wants to join 'не ' prefix."""
+    if not suggestions:
+        return False
+    wl = word.lower()
+    if not wl.startswith("не "):
+        return False
+    # "не сознательно" → remove space → "несознательно"
+    joined = wl[:2] + wl[3:]
+    return any(joined == s.lower() for s in suggestions)
+
+
 def find_paragraph_data(para_data, global_pos):
     for pd in para_data:
         start = pd["clean_offset"]
@@ -238,6 +250,10 @@ def main():
             continue
 
         if is_hyphenation_artifact(word, suggestions):
+            skipped += 1
+            continue
+
+        if is_ne_prefix_split(word, suggestions):
             skipped += 1
             continue
 
