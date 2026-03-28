@@ -67,9 +67,10 @@
     var exItem = Utils.trim(teamExceptions[ti]);
     if (exItem) teamAlts.push(Utils.escapeRegex(exItem));
   }
-  var teamToken = "\u00AB[^\u00BB]+\u00BB"; // «...»
+  var plainTeamToken = "(?:[A-ZА-ЯЁ]{2,}|[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё0-9]+(?:\\s+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё0-9]+){0,2})";
+  var teamToken = "(?:\u00AB[^\u00BB]+\u00BB|" + plainTeamToken + ")";
   if (teamAlts.length > 0) {
-    teamToken = "(?:\u00AB[^\u00BB]+\u00BB|" + teamAlts.join("|") + ")";
+    teamToken = "(?:\u00AB[^\u00BB]+\u00BB|" + teamAlts.join("|") + "|" + plainTeamToken + ")";
   }
   // Сокращение города после команды: «Динамо» Мх, «Динамо» М, «Торпедо» Мск
   var cityAbbr = "(?:\\s+[А-ЯЁ][а-яё]*\\.?)?";
@@ -82,7 +83,9 @@
 
   // Определяет, является ли сегмент парой команд: «Ювентус» – «Сити»
   function isPairSegment(trimmed) {
-    return pairRe.test(trimmed);
+    if (!trimmed) return false;
+    var normalized = Utils.trim(String(trimmed).replace(/[.!?…,:;]+$/, ""));
+    return pairRe.test(normalized);
   }
 
   // Пропуск URL-сегментов: www, .com, .ru и т.п.

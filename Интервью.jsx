@@ -17,15 +17,24 @@
   }
 
   var PS_PRESS = Utils.ensureParaStyle(doc, "Press");
+  var PS_RUBRIKA = Utils.ensureParaStyle(doc, "Rubrika");
   var PS_ZAG = Utils.ensureParaStyle(doc, "Zagolovok");
   var PS_POD = Utils.ensureParaStyle(doc, "Podzagolovok");
-  if (!PS_PRESS || !PS_ZAG || !PS_POD) {
+  if (!PS_PRESS || !PS_RUBRIKA || !PS_ZAG || !PS_POD) {
     alert("Не удалось создать необходимые стили абзацев.");
     return;
   }
 
   var RE_TWO_WORDS_BEFORE_COLON = /^([\s«"'"‚'']*\S+)\s+(\S+)\s*:(.*)$/;
   var RE_ANY_PAREN_NOTE = /^\(\s*[^)]*\)\s*\.?$/;
+
+  function isLeadCandidateText(txt) {
+    var t = Utils.trim(txt);
+    if (!t) return false;
+    if (Utils.beginsWithDash(t)) return false;
+    if (Utils.isSubheader(t)) return false;
+    return /[.!?…]["»)]*\s*$/.test(t);
+  }
 
   var story = Utils.getTargetStory(doc);
   if (!story) {
@@ -53,7 +62,14 @@
 
     try {
       if (paras[0] && paras[0].isValid) {
-        paras[0].appliedParagraphStyle = PS_PRESS;
+        var firstLine = Utils.trim(Utils.getParaText(paras[0]));
+        if (/Экспертное мнение\s*$/i.test(firstLine)) {
+          paras[0].appliedParagraphStyle = PS_RUBRIKA;
+        } else if (/После матча\s*$/i.test(firstLine)) {
+          paras[0].appliedParagraphStyle = PS_PRESS;
+        } else {
+          paras[0].appliedParagraphStyle = PS_RUBRIKA;
+        }
       }
     } catch (e) {}
 
@@ -149,7 +165,7 @@
 
     // --- Scan for subheaders and dash-lines, skipping signature/paren ---
     var dashIdx = [];
-    var lastHeaderIdx = 1;
+    var firstSubheaderIdx = -1;
 
     function isSignatureRange(idx) {
       if (sigStartIdx >= 0 && idx >= sigStartIdx && idx <= sigEndIdx) return true;
@@ -170,7 +186,7 @@
           try {
             if (Utils.isSubheader(t)) {
               p.appliedParagraphStyle = PS_POD;
-              lastHeaderIdx = i;
+              if (firstSubheaderIdx < 0) firstSubheaderIdx = i;
             }
           } catch (e) {}
         }
@@ -182,13 +198,27 @@
       Utils.applyCharStyleToPara(para, charStyle, fontStyleName);
     }
 
-    // --- Bold lead ---
-    var bodyIdx = lastHeaderIdx + 1;
-    if (bodyIdx < paras.length && bodyIdx !== sigIdx && bodyIdx !== parenIdx) {
+    // --- Bold intro lead ---
+    // Вводное предложение, если есть, всегда стоит либо сразу после заголовка,
+    // либо сразу после первого подзаголовка, и всегда до начала реплик с тире.
+    var firstDashIdx = (dashIdx.length > 0) ? dashIdx[0] : paras.length;
+    var leadCandidates = [2];
+    if (firstSubheaderIdx >= 0) leadCandidates.push(firstSubheaderIdx + 1);
+    var seenLead = {};
+
+    for (var lc = 0; lc < leadCandidates.length; lc++) {
+      var bodyIdx = leadCandidates[lc];
+      if (seenLead[bodyIdx]) continue;
+      seenLead[bodyIdx] = 1;
+      if (bodyIdx >= firstDashIdx) continue;
+      if (bodyIdx >= paras.length || bodyIdx === sigIdx || bodyIdx === parenIdx) continue;
+      if (isSignatureRange(bodyIdx)) continue;
+
       try {
         var bodyPara = paras[bodyIdx];
-        if (bodyPara && bodyPara.isValid && !Utils.beginsWithDash(Utils.getParaText(bodyPara))) {
+        if (bodyPara && bodyPara.isValid && isLeadCandidateText(Utils.getParaText(bodyPara))) {
           applyCharStyleToPara(bodyPara, CS_TVBOLD, fontInfo.bold);
+          break;
         }
       } catch (e) {}
     }
