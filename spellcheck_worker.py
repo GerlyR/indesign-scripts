@@ -47,18 +47,51 @@ def normalize_word(word):
     return re.sub(r"\s+", " ", (word or "").strip().lower().replace("ё", "е"))
 
 
+SURNAME_SUFFIXES = [
+    'ов', 'ова', 'ев', 'ева',
+    'ин', 'ина', 'ын', 'ына',
+    'ский', 'ская', 'цкий', 'цкая',
+    'енко', 'чук', 'юк',
+    'дзе', 'швили', 'ян', 'янц',
+    'ец', 'иц',
+]
+
+
+def is_likely_name(word):
+    """Check if a capitalized word looks like a Russian proper name/surname."""
+    if not word or not word[0].isupper():
+        return False
+    letters = re.sub(r"[^А-Яа-яЁё]", "", word)
+    if len(letters) < 3:
+        return False
+    lower = letters.lower().replace('ё', 'е')
+    for suffix in SURNAME_SUFFIXES:
+        if lower.endswith(suffix) and len(lower) > len(suffix) + 2:
+            return True
+    return False
+
+
+def is_case_only_suggestion(word, suggestions):
+    """Skip if all suggestions differ only in capitalization."""
+    if not suggestions or not word or not word[0].isupper():
+        return False
+    wl = word.lower().replace('\u0451', '\u0435')
+    return all(s.lower().replace('\u0451', '\u0435') == wl for s in suggestions)
+
+
 def load_user_dictionary(worker_dir):
     words = set()
-    dict_path = os.path.join(worker_dir, "user_dictionary.txt")
-    try:
-        with open(dict_path, "r", encoding="utf-8") as f:
-            for raw_line in f:
-                line = raw_line.strip()
-                if not line or line.startswith("#") or line.startswith(";"):
-                    continue
-                words.add(normalize_word(line))
-    except OSError:
-        pass
+    for filename in ["user_dictionary.txt", "known_names.txt"]:
+        dict_path = os.path.join(worker_dir, filename)
+        try:
+            with open(dict_path, "r", encoding="utf-8") as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or line.startswith(";"):
+                        continue
+                    words.add(normalize_word(line))
+        except OSError:
+            pass
     return words
 
 
@@ -87,6 +120,10 @@ def should_skip_uppercase_word(word, global_pos, clean_text, user_words):
         return True
 
     if word and word[0].isupper() and not is_likely_sentence_start(clean_text, global_pos):
+        return True
+
+    # Even at sentence start, skip if it looks like a surname
+    if word and word[0].isupper() and is_likely_name(word):
         return True
 
     return False
@@ -243,6 +280,10 @@ def main():
         suggestions = item.get('s', [])
 
         if not suggestions:
+            continue
+
+        if word and word[0].isupper() and is_case_only_suggestion(word, suggestions):
+            skipped += 1
             continue
 
         if should_skip_uppercase_word(word, global_pos, clean_text, user_words):
