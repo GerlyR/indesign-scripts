@@ -154,7 +154,7 @@
 
       try {
         var lastIP = story.insertionPoints[story.insertionPoints.length - 1];
-        if (lastIP) {
+        if (lastIP && lastIP.isValid) {
           lastIP.contents = signLine;
         }
       } catch (e) {}

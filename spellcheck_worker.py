@@ -10,9 +10,14 @@ import os
 import json
 import re
 
-# Force UTF-8
-sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+# Force UTF-8 (reconfigure requires Python 3.7+)
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     import urllib.request
@@ -213,6 +218,22 @@ def main():
 
     input_path = sys.argv[1]
     output_path = sys.argv[2]
+
+    try:
+        _run(input_path, output_path)
+    except Exception as e:
+        # Always write output so JSX doesn't hang waiting for the file
+        print(f"Fatal error: {e}", file=sys.stderr)
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump({"error": f"Worker crashed: {e}", "matches": [], "totalChecked": 0},
+                          f, ensure_ascii=False)
+        except Exception:
+            pass
+        sys.exit(1)
+
+
+def _run(input_path, output_path):
     worker_dir = os.path.dirname(os.path.abspath(__file__))
     user_words = load_user_dictionary(worker_dir)
 

@@ -194,7 +194,7 @@
       if (cs && cs.isValid) return cs;
     } catch (e) {}
     try {
-      var cs = doc.characterStyles.add({name: name});
+      cs = doc.characterStyles.add({name: name});
       if (fontStyleName) {
         try {
           cs.fontStyle = fontStyleName;

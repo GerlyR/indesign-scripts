@@ -156,12 +156,12 @@
     try {
       var st = stories[s4];
       if (!st || !st.isValid) continue;
-      var paras = st.paragraphs.everyItem().getElements();
-      if (!paras || paras.length === 0) continue;
+      var parasCount = st.paragraphs.length;
+      if (parasCount === 0) continue;
 
-      for (var i = 0; i < paras.length; i++) {
+      for (var i = 0; i < parasCount; i++) {
         try {
-          var p = paras[i];
+          var p = st.paragraphs[i];
           if (!p || !p.isValid) continue;
 
           // Пропуск абзацев с назначенными стилями

@@ -123,9 +123,10 @@
   // --- Call Python ---
   function runPython() {
     var bat = File(BAT_FILE);
-    bat.encoding = "UTF-8";
+    bat.encoding = "CP1251";
     if (!bat.open("w")) { alert("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C bat."); return false; }
     bat.writeln("@echo off");
+    bat.writeln("chcp 65001 >nul");
     var cmd = '"' + PYTHON_EXE + '" "' + WORKER_PY + '" "' + INPUT_FILE + '" "' + OUTPUT_FILE + '"';
     bat.writeln(cmd);
     bat.close();
@@ -259,9 +260,10 @@
 
     var batPath = TEMP_DIR + "\\indd_sync_" + RUN_ID + ".bat";
     var bat = File(batPath);
-    bat.encoding = "UTF-8";
+    bat.encoding = "CP1251";
     if (!bat.open("w")) return;
     bat.writeln("@echo off");
+    bat.writeln("chcp 65001 >nul");
     bat.writeln('"' + PYTHON_EXE + '" "' + syncPy + '"');
     bat.close();
 

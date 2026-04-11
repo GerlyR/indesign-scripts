@@ -298,7 +298,7 @@
       grepOnTarget(target, "  +", { changeTo: " " });
       grepOnTarget(target, "\\s+,", { changeTo: "," });
       grepOnTarget(target, "\\s+\\.", { changeTo: "." });
-      textFindChangeOnTarget(target, "\r\r", "\r");
+      Utils.textChange(target, "\r\r", "\r");
 
       finalBreaksCleanOnAllEight(target, cBold, pStand);
 
