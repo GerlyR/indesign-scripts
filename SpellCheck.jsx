@@ -112,12 +112,17 @@
       return false;
     }
 
-    // Wait for output
-    var waited = 0;
+    // Wait for output with exponential backoff (fast initial checks, then 1s)
+    var waitedMs = 0;
+    var maxWaitMs = 120000; // 2 min
+    var delays = [100, 150, 250, 400, 700, 1000]; // ms, then repeat 1000
+    var step = 0;
     var out = File(OUTPUT_FILE);
-    while (!out.exists && waited < 120) {
-      $.sleep(1000);
-      waited++;
+    while (!out.exists && waitedMs < maxWaitMs) {
+      var delay = (step < delays.length) ? delays[step] : 1000;
+      $.sleep(delay);
+      waitedMs += delay;
+      step++;
       out = File(OUTPUT_FILE);
     }
     try { File(BAT_FILE).remove(); } catch (e) {}
@@ -126,7 +131,7 @@
       if (!$.global.__BATCH_MODE) alert("\u0422\u0430\u0439\u043C\u0430\u0443\u0442 (2 \u043C\u0438\u043D).");
       return false;
     }
-    $.sleep(300);
+    $.sleep(200);
     return true;
   }
 

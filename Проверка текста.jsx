@@ -50,6 +50,9 @@
       msg.push("  \u2192 " + ob.words[wi]);
     }
   }
+  if (ob.hasOverset) {
+    msg.push("\u26A0 \u0422\u0435\u043A\u0441\u0442 \u0432\u044B\u0445\u043E\u0434\u0438\u0442 \u0437\u0430 \u0444\u0440\u0435\u0439\u043C \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u044B \u0432\u0440\u0443\u0447\u043D\u0443\u044E.");
+  }
 
   // Spelling
   if (sp.spellCount > 0 || sp.totalMatches > 0) {

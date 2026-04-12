@@ -104,10 +104,10 @@
     try {
       var st = stories[s1];
       if (!st || !st.isValid) continue;
-      var allChars = st.characters.everyItem();
-      if (allChars) {
-        allChars.pointSize = 8;
-        allChars.leading = 8;
+      var allText = st.texts[0];
+      if (allText && allText.isValid) {
+        allText.pointSize = 8;
+        allText.leading = 8;
       }
     } catch (e) {}
   }
