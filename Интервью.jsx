@@ -117,8 +117,6 @@
     // --- Detect signature and parenthetical note FIRST (from end) ---
     // Поддержка: "Имя ФАМИЛИЯ." или "Имя ФАМИЛИЯ,\nиз Города." + опц. "(примечание)"
     var parenIdx = -1;
-    var sigStartIdx = -1;
-    var sigEndIdx = -1;
 
     // Сначала ищем parenthetical note с конца
     for (var j = paras.length - 1; j >= 0; j--) {
@@ -136,29 +134,9 @@
 
     // Определяем где искать подпись
     var sigSearchEnd = (parenIdx >= 0) ? parenIdx : paras.length;
-
-    // Проверяем двухстрочный формат: "Имя ФАМИЛИЯ,\nиз Города."
-    if (sigSearchEnd >= 2) {
-      try {
-        var cand1Txt = Utils.trim(Utils.getParaText(paras[sigSearchEnd - 1]));
-        var cand2Txt = Utils.trim(Utils.getParaText(paras[sigSearchEnd - 2]));
-        if (Utils.isSignatureCity(cand1Txt) && Utils.isSignature(cand2Txt)) {
-          sigStartIdx = sigSearchEnd - 2;
-          sigEndIdx = sigSearchEnd - 1;
-        }
-      } catch (e) {}
-    }
-
-    // Если двухстрочная не найдена, проверяем однострочную
-    if (sigStartIdx < 0 && sigSearchEnd >= 1) {
-      try {
-        var candTxt = Utils.trim(Utils.getParaText(paras[sigSearchEnd - 1]));
-        if (Utils.isSignature(candTxt)) {
-          sigStartIdx = sigSearchEnd - 1;
-          sigEndIdx = sigSearchEnd - 1;
-        }
-      } catch (e) {}
-    }
+    var sig = Utils.detectSignature(paras, sigSearchEnd);
+    var sigStartIdx = sig.sigStartIdx;
+    var sigEndIdx = sig.sigEndIdx;
 
     // Совместимость: sigIdx = первая строка подписи (для paintEnd)
     var sigIdx = sigStartIdx;

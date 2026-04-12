@@ -501,27 +501,39 @@
   /**
    * Загружает список команд-исключений из INI файла
    */
-  Utils.loadTeamExceptions = function() {
-    var list = [];
+  /**
+   * Загружает текстовый конфиг-файл: строки, пропуская пустые и комментарии (# или ;).
+   * @param {string} filePath — полный путь к файлу
+   * @returns {string[]} — массив непустых строк
+   */
+  Utils.loadConfigLines = function(filePath) {
+    var lines = [];
     try {
-      var panel = Utils.getScriptsPanelFolder();
-      if (!panel) return list;
-      
-      var ini = File(panel.fullName + "/Команды-исключения.ini");
-      if (ini && ini.exists && ini.open("r")) {
-        try {
-          while (!ini.eof) {
-            var line = Utils.trim(ini.readln());
-            if (line && !/^#/.test(line) && !/^;/.test(line)) {
-              list.push(line);
-            }
+      var f = File(filePath);
+      if (!f || !f.exists) return lines;
+      f.encoding = "UTF-8";
+      if (!f.open("r")) return lines;
+      try {
+        while (!f.eof) {
+          var line = Utils.trim(f.readln());
+          if (line && line.charAt(0) !== "#" && line.charAt(0) !== ";") {
+            lines.push(line);
           }
-        } finally {
-          ini.close();
         }
+      } finally {
+        f.close();
       }
     } catch (e) {}
-    return list;
+    return lines;
+  };
+
+  Utils.loadTeamExceptions = function() {
+    try {
+      var panel = Utils.getScriptsPanelFolder();
+      if (!panel) return [];
+      return Utils.loadConfigLines(panel.fullName + "/Команды-исключения.ini");
+    } catch (e) {}
+    return [];
   };
   
   /**
@@ -611,6 +623,45 @@
     var t = Utils.trim(txt);
     if (!t) return false;
     return /^из\s+[А-ЯЁа-яё][а-яё\-]+\s*[.!?\u2026]*\s*$/.test(t);
+  };
+
+  /**
+   * Ищет подпись автора в конце массива абзацев.
+   * Поддержка: "Имя ФАМИЛИЯ." или "Имя ФАМИЛИЯ,\nиз Города."
+   * @param {Paragraphs|Array} paras — коллекция абзацев (story.paragraphs)
+   * @param {number} [endIdx] — индекс конца поиска (по умолчанию paras.length)
+   * @returns {{sigStartIdx:number, sigEndIdx:number}} — индексы (-1 если не найдена)
+   */
+  Utils.detectSignature = function(paras, endIdx) {
+    var sig = { sigStartIdx: -1, sigEndIdx: -1 };
+    if (!paras) return sig;
+    var n = (endIdx !== undefined) ? endIdx : paras.length;
+
+    // Двухстрочный формат: "Имя ФАМИЛИЯ,\nиз Города."
+    if (n >= 2) {
+      try {
+        var lastTxt = Utils.trim(Utils.getParaText(paras[n - 1]));
+        var prevTxt = Utils.trim(Utils.getParaText(paras[n - 2]));
+        if (Utils.isSignatureCity(lastTxt) && Utils.isSignature(prevTxt)) {
+          sig.sigStartIdx = n - 2;
+          sig.sigEndIdx = n - 1;
+          return sig;
+        }
+      } catch (e) {}
+    }
+
+    // Однострочный: "Имя ФАМИЛИЯ."
+    if (n >= 1) {
+      try {
+        var txt = Utils.trim(Utils.getParaText(paras[n - 1]));
+        if (Utils.isSignature(txt)) {
+          sig.sigStartIdx = n - 1;
+          sig.sigEndIdx = n - 1;
+        }
+      } catch (e) {}
+    }
+
+    return sig;
   };
 
   /**

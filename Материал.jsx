@@ -65,32 +65,9 @@
     Utils.trimTailEmptyParas(story);
     if (!story.paragraphs || story.paragraphs.length === 0) return;
 
-    var sigStartIdx = -1;
-    var sigEndIdx = -1;
-    var pLen = story.paragraphs.length;
-
-    if (pLen >= 2) {
-      try {
-        var lastTxt2 = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 1]));
-        var prevTxt2 = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 2]));
-        if (Utils.isSignatureCity(lastTxt2) && Utils.isSignature(prevTxt2)) {
-          sigStartIdx = pLen - 2;
-          sigEndIdx = pLen - 1;
-        } else if (Utils.isSignature(lastTxt2)) {
-          sigStartIdx = pLen - 1;
-          sigEndIdx = pLen - 1;
-        }
-      } catch (e) {}
-    } else if (pLen === 1) {
-      try {
-        var onlyTxt = Utils.trim(Utils.getParaText(story.paragraphs[0]));
-        if (Utils.isSignature(onlyTxt)) {
-          sigStartIdx = 0;
-          sigEndIdx = 0;
-        }
-      } catch (e) {}
-    }
-
+    var sig = Utils.detectSignature(story.paragraphs);
+    var sigStartIdx = sig.sigStartIdx;
+    var sigEndIdx = sig.sigEndIdx;
     var hasSig = (sigStartIdx >= 0);
 
     // --- Scan for subheaders, skipping signature lines ---

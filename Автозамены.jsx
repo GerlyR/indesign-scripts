@@ -74,30 +74,9 @@
     }
   }
 
-  // --- Load config file lines ---
-  function loadConfigLines(filename) {
-    var f = File(SCRIPT_DIR + "\\" + filename);
-    if (!f.exists) return [];
-    f.encoding = "UTF-8";
-    if (!f.open("r")) return [];
-    var lines = [];
-    try {
-      while (!f.eof) {
-        var line = f.readln();
-        if (!line) continue;
-        line = line.replace(/^\s+|\s+$/g, "");
-        if (!line || line.charAt(0) === "#" || line.charAt(0) === ";") continue;
-        lines.push(line);
-      }
-    } finally {
-      f.close();
-    }
-    return lines;
-  }
-
   // --- Load editorial rules ---
   function loadEditorialRules() {
-    var lines = loadConfigLines("editorial_rules.txt");
+    var lines = Utils.loadConfigLines(SCRIPT_DIR + "\\editorial_rules.txt");
     var rules = [];
     for (var i = 0; i < lines.length; i++) {
       var parts = lines[i].split("\t");
@@ -165,7 +144,7 @@
 
   // --- Load obscene patterns ---
   function loadObscenePatterns() {
-    var lines = loadConfigLines("obscene_patterns.txt");
+    var lines = Utils.loadConfigLines(SCRIPT_DIR + "\\obscene_patterns.txt");
     var patterns = [];
     for (var i = 0; i < lines.length; i++) {
       patterns.push(lines[i].toLowerCase());

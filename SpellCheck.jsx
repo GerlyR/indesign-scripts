@@ -205,18 +205,20 @@
         var tagStart = m.offset + m.length;
         var tagLen = tag.length;
 
-        // Style arrow "→" gray
+        // Style arrow "→" gray, no underline
         try {
           para.characters[tagStart].fillColor = gray;
+          para.characters[tagStart].underline = false;
         } catch (e) {}
 
-        // Style suggestion green
+        // Style suggestion green, no underline
         if (tagLen > 1) {
           try {
             var s0 = para.characters[tagStart + 1];
             var s1 = para.characters[tagStart + tagLen - 1];
             var sr = para.characters.itemByRange(s0, s1);
             sr.fillColor = green;
+            sr.underline = false;
           } catch (e) {}
         }
 

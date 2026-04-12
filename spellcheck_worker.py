@@ -40,7 +40,7 @@ def _call_yandex_speller(text):
     params = urllib.parse.urlencode({
         'text': text,
         'lang': 'ru',
-        'options': 14  # IGNORE_URLS(4) | IGNORE_DIGITS(2) | FIND_REPEAT_WORDS(8)
+        'options': 526  # IGNORE_URLS(4) | IGNORE_DIGITS(2) | FIND_REPEAT_WORDS(8) | IGNORE_CAPITALIZATION(512)
     }).encode('utf-8')
 
     last_error = None
@@ -110,6 +110,8 @@ SURNAME_SUFFIXES = [
     'ский', 'ская', 'цкий', 'цкая',
     'енко', 'чук', 'юк',
     'дзе', 'швили', 'ян', 'янц',
+    'ич',  # Balkan: Новичич, Мартинич
+    'ли', 'ри', 'ни',  # Asian/foreign: Накамури, Карлини
     # 'ец', 'иц' removed — too many false positives (Борец, Кузнец, Певец)
 ]
 
@@ -173,7 +175,7 @@ def should_skip_uppercase_word(word, global_pos, clean_text, user_words):
     if not letters_only:
         return True
 
-    if letters_only.isupper() and len(letters_only) <= 5:
+    if letters_only.isupper() and len(letters_only) <= 7:
         return True
 
     if word and word[0].isupper() and not is_likely_sentence_start(clean_text, global_pos):
@@ -189,19 +191,7 @@ def should_skip_uppercase_word(word, global_pos, clean_text, user_words):
 def is_hyphenation_artifact(word, suggestions):
     if "-" not in word or not suggestions:
         return False
-    joined = word.replace("-", "")
-    return any(joined.lower() == suggestion.lower() for suggestion in suggestions)
-
-
-def is_ne_prefix_split(word, suggestions):
-    """Skip 'не сознательно'→'несознательно' — Yandex wants to join 'не ' prefix."""
-    if not suggestions:
-        return False
-    wl = word.lower()
-    if not wl.startswith("не "):
-        return False
-    # "не сознательно" → remove space → "несознательно"
-    joined = wl[:2] + wl[3:]
+    joined = word.replace("-", "").lower()
     return any(joined == s.lower() for s in suggestions)
 
 
@@ -369,10 +359,6 @@ def _run(input_path, output_path):
             continue
 
         if is_hyphenation_artifact(word, suggestions):
-            skipped += 1
-            continue
-
-        if is_ne_prefix_split(word, suggestions):
             skipped += 1
             continue
 
