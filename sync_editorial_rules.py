@@ -60,8 +60,12 @@ def main():
     finally:
         wb.close()
 
-    with open(txt_path, 'w', encoding='utf-8') as f:
-        f.writelines(lines)
+    try:
+        with open(txt_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+    except OSError as e:
+        print(f"Cannot write {txt_path}: {e}", file=sys.stderr)
+        return
 
     print(f"Synced {len(lines) - 2} rules from xlsx", file=sys.stderr)
 

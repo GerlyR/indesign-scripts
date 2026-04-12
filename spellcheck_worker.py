@@ -34,7 +34,7 @@ def check_yandex_speller(text):
     params = urllib.parse.urlencode({
         'text': text,
         'lang': 'ru',
-        'options': 518  # IGNORE_URLS | IGNORE_DIGITS | FIND_REPEAT_WORDS
+        'options': 14  # IGNORE_URLS(4) | IGNORE_DIGITS(2) | FIND_REPEAT_WORDS(8)
     }).encode('utf-8')
 
     try:
@@ -45,7 +45,7 @@ def check_yandex_speller(text):
             return data  # list of {code, pos, row, col, len, word, s:[suggestions]}
     except Exception as e:
         print(f"Yandex Speller error: {e}", file=sys.stderr)
-        return []
+        return None  # distinguish failure from "no errors"
 
 
 def normalize_word(word):
@@ -55,10 +55,11 @@ def normalize_word(word):
 SURNAME_SUFFIXES = [
     'ов', 'ова', 'ев', 'ева',
     'ин', 'ина', 'ын', 'ына',
+    'ович', 'овна', 'евич', 'евна',
     'ский', 'ская', 'цкий', 'цкая',
     'енко', 'чук', 'юк',
     'дзе', 'швили', 'ян', 'янц',
-    'ец', 'иц',
+    # 'ец', 'иц' removed — too many false positives (Борец, Кузнец, Певец)
 ]
 
 
@@ -109,7 +110,7 @@ def is_likely_sentence_start(text, pos):
         i -= 1
     if i < 0:
         return True
-    return text[i] in ".!?…:;)\"]»}"
+    return text[i] in ".!?…:;)\"]»}—–"
 
 
 def should_skip_uppercase_word(word, global_pos, clean_text, user_words):
@@ -228,8 +229,8 @@ def main():
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump({"error": f"Worker crashed: {e}", "matches": [], "totalChecked": 0},
                           f, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as write_err:
+            print(f"Cannot write output: {write_err}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -293,6 +294,11 @@ def _run(input_path, output_path):
     print("Checking with Yandex Speller...", file=sys.stderr)
     speller_results = check_yandex_speller(clean_text)
 
+    api_error = None
+    if speller_results is None:
+        api_error = "Yandex Speller API unavailable"
+        speller_results = []
+
     skipped = 0
     for item in speller_results:
         global_pos = item.get('pos', 0)
@@ -344,7 +350,7 @@ def _run(input_path, output_path):
 
     # Write output
     result = {
-        'error': None,
+        'error': api_error,
         'matches': all_matches,
         'totalChecked': len(para_data)
     }
