@@ -56,6 +56,22 @@
       } catch (e) {}
     }
     try { File(batPath).remove(); } catch (e) {}
+
+    // Check for sync error sentinel (written by Python when xlsx is locked)
+    var errFile = File(txtPath + ".sync_error");
+    if (errFile.exists) {
+      try {
+        errFile.encoding = "UTF-8";
+        if (errFile.open("r")) {
+          var errMsg = errFile.read();
+          errFile.close();
+        }
+        errFile.remove();
+        if (!$.global.__BATCH_MODE) {
+          alert("\u26A0 \u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0438\u0437 xlsx:\n" + (errMsg || ""));
+        }
+      } catch (e) {}
+    }
   }
 
   // --- Load config file lines ---

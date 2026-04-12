@@ -26,10 +26,24 @@ def main():
         print("openpyxl not installed, skipping xlsx sync", file=sys.stderr)
         return
 
+    # Clean up old error sentinel
+    err_path = txt_path + ".sync_error"
+    try:
+        if os.path.exists(err_path):
+            os.remove(err_path)
+    except OSError:
+        pass
+
     try:
         wb = load_workbook(xlsx_path, read_only=True)
     except Exception as e:
         print(f"Cannot read xlsx (file locked?): {e}", file=sys.stderr)
+        # Write sentinel so JSX knows sync failed
+        try:
+            with open(err_path, 'w', encoding='utf-8') as ef:
+                ef.write(str(e))
+        except OSError:
+            pass
         return
 
     try:

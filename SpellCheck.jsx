@@ -234,6 +234,22 @@
   var story = Utils.getTargetStory(doc);
   if (!story) { $.global.__spellResult = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: false, error: null }; if (!$.global.__BATCH_MODE) alert("\u0412\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u0444\u0440\u0435\u0439\u043C."); return; }
 
+  if (!PYTHON_EXE && !$.global.__BATCH_MODE) {
+    // Offer to manually specify Python path
+    var userPath = prompt("Python \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0443\u0442\u044C \u043A python.exe\n(\u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0434\u043B\u044F \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430 \u043E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u0438):", "C:\\Python311\\python.exe");
+    if (userPath) {
+      userPath = userPath.replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "");
+      if (File(userPath).exists) {
+        PYTHON_EXE = userPath;
+        // Save for future runs
+        var pf = File(SCRIPT_DIR + "\\python_path.txt");
+        pf.encoding = "UTF-8";
+        if (pf.open("w")) { pf.write(userPath); pf.close(); }
+      } else {
+        alert("\u0424\u0430\u0439\u043B \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: " + userPath);
+      }
+    }
+  }
   if (!PYTHON_EXE) {
     $.global.__spellResult = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: true };
     if (!$.global.__BATCH_MODE) alert("\u26A0 Python \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 \u043E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430.");
