@@ -47,11 +47,9 @@
         if (s0 && s0.hasOwnProperty("texts") && s0.texts && s0.texts.length > 0) {
           return s0.texts[0].parentStory;
         }
-        if (s0 && s0.constructor) {
-          var cname = s0.constructor.name;
-          if (cname === "InsertionPoint" || cname === "TextFrame") {
-            return s0.parentStory;
-          }
+        // Duck-type check: parentStory is safer than constructor.name in CS4
+        if (s0 && s0.hasOwnProperty("parentStory") && s0.parentStory) {
+          return s0.parentStory;
         }
       } catch (e) {}
     }
@@ -206,105 +204,9 @@
     }
   };
   
-  /**
-   * Получает символьный стиль (без создания)
-   */
-  Utils.getCharStyle = function(doc, name) {
-    if (!doc || !name) return null;
-    try {
-      var cs = doc.characterStyles.itemByName(name);
-      if (cs && cs.isValid) return cs;
-    } catch (e) {}
-    return null;
-  };
-  
-  /**
-   * Применяет жирный стиль к тексту
-   */
-  Utils.applyBold = function(textObj, charStyle) {
-    if (!textObj) return false;
-    try { if (textObj.isValid === false) return false; } catch (e) {}
-    
-    if (charStyle) {
-      try {
-        textObj.appliedCharacterStyle = charStyle;
-        return true;
-      } catch (e) {}
-    }
-    
-    var candidates = ["Bold", "SemiBold", "Semibold", "Demi", "Black", "Heavy", 
-                      "Жирный", "Полужирный", "Medium", "DemiBold"];
-    for (var i = 0; i < candidates.length; i++) {
-      try {
-        textObj.fontStyle = candidates[i];
-        return true;
-      } catch (e) {}
-    }
-    return false;
-  };
-  
-  /**
-   * Применяет курсив к тексту
-   */
-  Utils.applyItalic = function(textObj, charStyle) {
-    if (!textObj) return false;
-    try { if (textObj.isValid === false) return false; } catch (e) {}
-    
-    if (charStyle) {
-      try {
-        textObj.appliedCharacterStyle = charStyle;
-        return true;
-      } catch (e) {}
-    }
-    
-    var candidates = ["Italic", "Oblique", "Курсив", "Наклонный"];
-    for (var i = 0; i < candidates.length; i++) {
-      try {
-        textObj.fontStyle = candidates[i];
-        return true;
-      } catch (e) {}
-    }
-    return false;
-  };
-  
-  /**
-   * Применяет жирный курсив к тексту
-   */
-  Utils.applyBoldItalic = function(textObj, charStyle) {
-    if (!textObj) return false;
-    try { if (textObj.isValid === false) return false; } catch (e) {}
-    
-    if (charStyle) {
-      try {
-        textObj.appliedCharacterStyle = charStyle;
-        return true;
-      } catch (e) {}
-    }
-    
-    var combos = [
-      "Bold Italic", "BoldItalic", "Bold Oblique", "BoldOblique",
-      "Black Italic", "BlackItalic", "Heavy Italic", "HeavyItalic",
-      "Semibold Italic", "SemiBold Italic", "Demi Italic",
-      "Жирный курсив", "Полужирный курсив", "Полужирный наклонный"
-    ];
-    for (var i = 0; i < combos.length; i++) {
-      try {
-        textObj.fontStyle = combos[i];
-        return true;
-      } catch (e) {}
-    }
-    
-    // Фолбэк: fontStyle напрямую (не charStyle, чтобы не перезаписывать)
-    var boldCandidates = ["Bold", "SemiBold", "Semibold", "Demi", "Black", "Heavy", "Жирный", "Полужирный"];
-    var italicCandidates = ["Italic", "Oblique", "Курсив", "Наклонный"];
-    for (var bi = 0; bi < boldCandidates.length; bi++) {
-      for (var ii = 0; ii < italicCandidates.length; ii++) {
-        try { textObj.fontStyle = boldCandidates[bi] + " " + italicCandidates[ii]; return true; } catch (e) {}
-      }
-    }
-    return false;
-  };
-  
+  // getCharStyle, applyBold, applyItalic, applyBoldItalic — removed (dead code,
+  // superseded by ensureCharStyleSmart + applyCharStyleToPara)
+
   // ============================================================================
   // Работа с текстом
   // ============================================================================
@@ -322,8 +224,8 @@
    * Получает текст абзаца без завершающего \r
    */
   Utils.getParaText = function(p) {
-    if (!p || !p.contents) return "";
-    return String(p.contents).replace(/\r$/, "");
+    if (!p) return "";
+    try { return String(p.contents).replace(/\r$/, ""); } catch (e) { return ""; }
   };
   
   /**
@@ -464,32 +366,9 @@
    */
   Utils.collapseBreaks = function(story) {
     if (!story) return;
-    var changed = 1;
-    var iterations = 0;
-    var maxIterations = 10;
-    
-    while (changed > 0 && iterations < maxIterations) {
-      changed = 0;
-      iterations++;
-      
-      Utils.resetFindGrep();
-      try {
-        app.findGrepPreferences.findWhat = "\\r[ \\x{00A0}\\t]*\\r+";
-        app.changeGrepPreferences.changeTo = "\\r";
-        var result = story.changeGrep();
-        changed += (result && result.length) ? result.length : 0;
-      } catch (e) {}
-      
-      Utils.resetFindGrep();
-      try {
-        app.findGrepPreferences.findWhat = "\\r\\r+";
-        app.changeGrepPreferences.changeTo = "\\r";
-        var result2 = story.changeGrep();
-        changed += (result2 && result2.length) ? result2.length : 0;
-      } catch (e) {}
-      
-      Utils.removeWhitespaceParas(story);
-    }
+    // Single combined GREP: collapse any sequence of \r + optional whitespace + \r into one \r
+    Utils.grepChange(story, "\\r([ \\x{00A0}\\t]*\\r)+", { changeTo: "\\r" });
+    Utils.removeWhitespaceParas(story);
   };
   
   /**
@@ -557,7 +436,9 @@
   /**
    * Ищет установленный Python (3.8–3.13) на Windows.
    * Сначала проверяет python_path.txt в scriptDir, затем стандартные пути.
-   * @param {string} scriptDir — fsName папки, содержащей скрипт
+   * @param {string} scriptDir — fsName папки, содержащей скрипт.
+   *   ВАЖНО: Захватите File($.fileName).parent.fsName ДО вызова $.evalFile()
+   *   для загрузки CommonUtils, т.к. $.evalFile() перезаписывает $.fileName.
    * @returns {string|null} — fsName python.exe или null
    */
   Utils.findPython = function(scriptDir) {
@@ -565,7 +446,8 @@
     if (cf.exists) {
       cf.encoding = "UTF-8";
       if (cf.open("r")) {
-        var p = cf.read().replace(/[\r\n\s]+/g, "");
+        // Trim only leading/trailing whitespace — preserve internal spaces in paths
+        var p = cf.read().replace(/^[\r\n\s]+|[\r\n\s]+$/g, "");
         cf.close();
         if (p && File(p).exists) return p;
       }
@@ -576,6 +458,8 @@
     if (la) for (var i = 0; i < vers.length; i++) dirs.push(la + "\\Programs\\Python\\Python" + vers[i]);
     var pf = $.getenv("ProgramFiles");
     if (pf) for (var i = 0; i < vers.length; i++) dirs.push(pf + "\\Python" + vers[i]);
+    var pf86 = $.getenv("ProgramFiles(x86)");
+    if (pf86) for (var i = 0; i < vers.length; i++) dirs.push(pf86 + "\\Python" + vers[i]);
     for (var i = 0; i < vers.length; i++) dirs.push("C:\\Python" + vers[i]);
     for (var i = 0; i < dirs.length; i++) {
       var f = File(dirs[i] + "\\python.exe");
@@ -750,6 +634,13 @@
    */
   Utils.detectFontVariants = function(story) {
     var result = { bold: null, italic: null, boldItalic: null, family: null, baseStyle: null };
+    // Cache by story ID to avoid re-scanning app.fonts (can be 2000+ entries)
+    try {
+      var cacheKey = "dfv_" + story.id;
+      if ($.global.__dfvCache && $.global.__dfvCache[cacheKey]) {
+        return $.global.__dfvCache[cacheKey];
+      }
+    } catch (e) {}
     try {
       var samplePara = null;
       for (var pi = 0; pi < story.paragraphs.length && pi < 5; pi++) {
@@ -815,6 +706,11 @@
       result.bold = pickBest(candidates.bold);
       result.italic = pickBest(candidates.italic);
       result.boldItalic = pickBest(candidates.boldItalic);
+    } catch (e) {}
+    // Store in cache
+    try {
+      if (!$.global.__dfvCache) $.global.__dfvCache = {};
+      $.global.__dfvCache["dfv_" + story.id] = result;
     } catch (e) {}
     return result;
   };
