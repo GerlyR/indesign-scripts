@@ -553,7 +553,37 @@
   // ============================================================================
   // Работа с файлами
   // ============================================================================
-  
+
+  /**
+   * Ищет установленный Python (3.8–3.13) на Windows.
+   * Сначала проверяет python_path.txt в scriptDir, затем стандартные пути.
+   * @param {string} scriptDir — fsName папки, содержащей скрипт
+   * @returns {string|null} — fsName python.exe или null
+   */
+  Utils.findPython = function(scriptDir) {
+    var cf = File(scriptDir + "\\python_path.txt");
+    if (cf.exists) {
+      cf.encoding = "UTF-8";
+      if (cf.open("r")) {
+        var p = cf.read().replace(/[\r\n\s]+/g, "");
+        cf.close();
+        if (p && File(p).exists) return p;
+      }
+    }
+    var vers = ["313", "312", "311", "310", "39", "38"];
+    var dirs = [];
+    var la = $.getenv("LOCALAPPDATA");
+    if (la) for (var i = 0; i < vers.length; i++) dirs.push(la + "\\Programs\\Python\\Python" + vers[i]);
+    var pf = $.getenv("ProgramFiles");
+    if (pf) for (var i = 0; i < vers.length; i++) dirs.push(pf + "\\Python" + vers[i]);
+    for (var i = 0; i < vers.length; i++) dirs.push("C:\\Python" + vers[i]);
+    for (var i = 0; i < dirs.length; i++) {
+      var f = File(dirs[i] + "\\python.exe");
+      if (f.exists) return f.fsName;
+    }
+    return null;
+  };
+
   /**
    * Получает папку Scripts Panel
    */

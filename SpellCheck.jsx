@@ -11,35 +11,8 @@
   try { $.evalFile(_f); } catch (e) { alert("Error loading CommonUtils.jsx:\n" + (e.message || e)); return; }
   var Utils = $.global.CommonUtils;
 
-  // --- Find Python ---
-  function findPython() {
-    // 1. Config file python_path.txt in script folder
-    var cf = File(SCRIPT_DIR + "\\python_path.txt");
-    if (cf.exists) {
-      cf.encoding = "UTF-8";
-      if (cf.open("r")) {
-        var p = cf.read().replace(/[\r\n\s]+/g, "");
-        cf.close();
-        if (p && File(p).exists) return p;
-      }
-    }
-    // 2. Auto-detect from standard Windows locations
-    var vers = ["313", "312", "311", "310", "39", "38"];
-    var dirs = [];
-    var la = $.getenv("LOCALAPPDATA");
-    if (la) for (var i = 0; i < vers.length; i++) dirs.push(la + "\\Programs\\Python\\Python" + vers[i]);
-    var pf = $.getenv("ProgramFiles");
-    if (pf) for (var i = 0; i < vers.length; i++) dirs.push(pf + "\\Python" + vers[i]);
-    for (var i = 0; i < vers.length; i++) dirs.push("C:\\Python" + vers[i]);
-    for (var i = 0; i < dirs.length; i++) {
-      var f = File(dirs[i] + "\\python.exe");
-      if (f.exists) return f.fsName;
-    }
-    return null;
-  }
-
   // --- Config ---
-  var PYTHON_EXE = findPython();
+  var PYTHON_EXE = Utils.findPython(SCRIPT_DIR);
   var WORKER_PY  = SCRIPT_DIR + "\\spellcheck_worker.py";
   var TEMP_DIR   = Folder.temp.fsName;
   var RUN_ID = String((new Date()).getTime()) + "_" + Math.floor(Math.random() * 1000000);
@@ -132,7 +105,11 @@
     bat.writeln(cmd);
     bat.close();
 
-    File(BAT_FILE).execute();
+    var launched = File(BAT_FILE).execute();
+    if (!launched) {
+      if (!$.global.__BATCH_MODE) alert("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443.");
+      return false;
+    }
 
     // Wait for output
     var waited = 0;
@@ -246,11 +223,10 @@
 
   // ====== MAIN ======
   var doc = Utils.getActiveDocument();
-  var _defaultSpell = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: false };
-  if (!doc) { $.global.__spellResult = _defaultSpell; if (!$.global.__BATCH_MODE) alert("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442."); return; }
+  if (!doc) { $.global.__spellResult = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: false, error: null }; if (!$.global.__BATCH_MODE) alert("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442."); return; }
 
   var story = Utils.getTargetStory(doc);
-  if (!story) { $.global.__spellResult = _defaultSpell; if (!$.global.__BATCH_MODE) alert("\u0412\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u0444\u0440\u0435\u0439\u043C."); return; }
+  if (!story) { $.global.__spellResult = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: false, error: null }; if (!$.global.__BATCH_MODE) alert("\u0412\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u0444\u0440\u0435\u0439\u043C."); return; }
 
   if (!PYTHON_EXE) {
     $.global.__spellResult = { spellCount: 0, totalMatches: 0, totalChecked: 0, noPython: true };
@@ -261,6 +237,7 @@
   var spellCount = 0;
   var totalMatches = 0;
   var totalChecked = 0;
+  var spellError = null;
   var matches = [];
 
   // Step 1: Spellcheck via Python
@@ -280,6 +257,7 @@
           totalMatches = matches.length;
           totalChecked = result.totalChecked || 0;
         } else if (result && result.error) {
+          spellError = result.error;
           if (!$.global.__BATCH_MODE) alert("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438:\n" + result.error);
         }
       }
@@ -296,7 +274,7 @@
   }
 
   // --- Store results for batch mode or show report ---
-  $.global.__spellResult = { spellCount: spellCount, totalMatches: totalMatches, totalChecked: totalChecked, noPython: !PYTHON_EXE };
+  $.global.__spellResult = { spellCount: spellCount, totalMatches: totalMatches, totalChecked: totalChecked, noPython: !PYTHON_EXE, error: spellError };
 
   if ($.global.__BATCH_MODE) return;
 

@@ -10,14 +10,15 @@
 
   var s1 = File(dir + "\\Автозамены.jsx");
   var s2 = File(dir + "\\SpellCheck.jsx");
+  var s1Error = null, s2Error = null;
 
   try {
     if (s1.exists) {
-      try { $.evalFile(s1); } catch (e) { alert("Ошибка в Автозамены.jsx:\n" + (e.message || e)); }
+      try { $.evalFile(s1); } catch (e) { s1Error = e.message || String(e); }
     }
 
     if (s2.exists) {
-      try { $.evalFile(s2); } catch (e) { alert("Ошибка в SpellCheck.jsx:\n" + (e.message || e)); }
+      try { $.evalFile(s2); } catch (e) { s2Error = e.message || String(e); }
     }
   } finally {
     $.global.__BATCH_MODE = false;
@@ -63,6 +64,15 @@
 
   if (sp.noPython) {
     msg.push("\n\u26A0 Python \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 \u043E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u044F \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u043B\u0430\u0441\u044C");
+  }
+  if (sp.error) {
+    msg.push("\n\u26A0 \u041E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u044F: " + sp.error);
+  }
+  if (s1Error) {
+    msg.push("\n\u26A0 \u0410\u0432\u0442\u043E\u0437\u0430\u043C\u0435\u043D\u044B: " + s1Error);
+  }
+  if (s2Error) {
+    msg.push("\n\u26A0 SpellCheck: " + s2Error);
   }
 
   msg.push("\nCtrl+Z \u0434\u043B\u044F \u043E\u0442\u043C\u0435\u043D\u044B");

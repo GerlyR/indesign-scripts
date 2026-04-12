@@ -13,33 +13,7 @@
   var TEMP_DIR   = Folder.temp.fsName;
   var RUN_ID     = String((new Date()).getTime()) + "_" + Math.floor(Math.random() * 1000000);
 
-  // --- Find Python ---
-  function findPython() {
-    var sd = SCRIPT_DIR;
-    var cf = File(sd + "\\python_path.txt");
-    if (cf.exists) {
-      cf.encoding = "UTF-8";
-      if (cf.open("r")) {
-        var p = cf.read().replace(/[\r\n\s]+/g, "");
-        cf.close();
-        if (p && File(p).exists) return p;
-      }
-    }
-    var vers = ["313", "312", "311", "310", "39", "38"];
-    var dirs = [];
-    var la = $.getenv("LOCALAPPDATA");
-    if (la) for (var i = 0; i < vers.length; i++) dirs.push(la + "\\Programs\\Python\\Python" + vers[i]);
-    var pf = $.getenv("ProgramFiles");
-    if (pf) for (var i = 0; i < vers.length; i++) dirs.push(pf + "\\Python" + vers[i]);
-    for (var i = 0; i < vers.length; i++) dirs.push("C:\\Python" + vers[i]);
-    for (var i = 0; i < dirs.length; i++) {
-      var f = File(dirs[i] + "\\python.exe");
-      if (f.exists) return f.fsName;
-    }
-    return null;
-  }
-
-  var PYTHON_EXE = findPython();
+  var PYTHON_EXE = Utils.findPython(SCRIPT_DIR);
 
   // --- Sync editorial rules from Excel ---
   function syncRulesFromExcel() {
@@ -65,7 +39,11 @@
     bat.writeln('"' + PYTHON_EXE + '" "' + syncPy + '"');
     bat.close();
 
-    File(batPath).execute();
+    var launched = File(batPath).execute();
+    if (!launched) {
+      try { File(batPath).remove(); } catch (e) {}
+      return;
+    }
 
     var waited = 0;
     while (waited < 20) {
@@ -108,6 +86,9 @@
       var parts = lines[i].split("\t");
       if (parts.length >= 3 && parts[0].toUpperCase() === "GREP" && parts[1] && parts[2]) {
         rules.push({ type: "grep", find: parts[1], replace: parts[2] });
+      } else if (parts[0] && parts[0].toUpperCase() === "GREP") {
+        // GREP line with missing replacement — skip, don't fall through to text
+        continue;
       } else if (parts.length >= 2 && parts[0] && parts[1]) {
         rules.push({ type: "text", find: parts[0], replace: parts[1] });
       }
@@ -152,7 +133,9 @@
             details.push("  \u00AB" + found[d] + "\u00BB \u2192 \u00AB" + r.replace + "\u00BB");
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        details.push("  \u26A0 \u041F\u0440\u0430\u0432\u0438\u043B\u043E #" + (i + 1) + " (" + r.find.substring(0, 30) + "): " + (e.message || e));
+      }
     }
     return { count: count, details: details };
   }
