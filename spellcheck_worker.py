@@ -9,6 +9,7 @@ import sys
 import os
 import json
 import re
+import time
 
 # Force UTF-8 (reconfigure requires Python 3.7+)
 try:
@@ -28,8 +29,13 @@ except ImportError:
     sys.exit(1)
 
 
-def check_yandex_speller(text):
-    """Check text with Yandex Speller API (free, no key needed)."""
+MAX_CHUNK_SIZE = 10000  # Yandex Speller works best with chunks under ~10KB
+MAX_RETRIES = 2
+RETRY_DELAY = 1.5  # seconds
+
+
+def _call_yandex_speller(text):
+    """Single Yandex Speller API call with retry logic."""
     url = "https://speller.yandex.net/services/spellservice.json/checkText"
     params = urllib.parse.urlencode({
         'text': text,
@@ -37,15 +43,60 @@ def check_yandex_speller(text):
         'options': 14  # IGNORE_URLS(4) | IGNORE_DIGITS(2) | FIND_REPEAT_WORDS(8)
     }).encode('utf-8')
 
-    try:
-        req = urllib.request.Request(url, data=params, method='POST')
-        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return data  # list of {code, pos, row, col, len, word, s:[suggestions]}
-    except Exception as e:
-        print(f"Yandex Speller error: {e}", file=sys.stderr)
-        return None  # distinguish failure from "no errors"
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            req = urllib.request.Request(url, data=params, method='POST')
+            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                return data  # list of {code, pos, row, col, len, word, s:[suggestions]}
+        except Exception as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                print(f"Yandex Speller attempt {attempt + 1} failed: {e}, retrying...",
+                      file=sys.stderr)
+                time.sleep(RETRY_DELAY)
+            else:
+                print(f"Yandex Speller error after {MAX_RETRIES + 1} attempts: {e}",
+                      file=sys.stderr)
+    return None  # all attempts failed
+
+
+def check_yandex_speller(text):
+    """Check text with Yandex Speller API, chunking long texts for reliability."""
+    if len(text) <= MAX_CHUNK_SIZE:
+        return _call_yandex_speller(text)
+
+    # Split into chunks at newline boundaries
+    chunks = []
+    current_pos = 0
+    while current_pos < len(text):
+        end = current_pos + MAX_CHUNK_SIZE
+        if end >= len(text):
+            chunks.append((current_pos, text[current_pos:]))
+        else:
+            # Find last newline within chunk
+            nl = text.rfind('\n', current_pos, end)
+            if nl > current_pos:
+                chunks.append((current_pos, text[current_pos:nl + 1]))
+                current_pos = nl + 1
+                continue
+            # No newline found — split at max size
+            chunks.append((current_pos, text[current_pos:end]))
+        current_pos = end
+
+    all_results = []
+    for offset, chunk in chunks:
+        results = _call_yandex_speller(chunk)
+        if results is None:
+            return None  # API failure — propagate
+        # Shift positions by chunk offset
+        for item in results:
+            item['pos'] = item.get('pos', 0) + offset
+        all_results.extend(results)
+
+    return all_results
 
 
 def normalize_word(word):

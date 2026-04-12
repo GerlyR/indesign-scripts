@@ -36,8 +36,10 @@ def main():
         ws = wb.active
 
         lines = [
-            "# Auto-generated from editorial_rules.xlsx\n",
-            "# DO NOT EDIT — edit the xlsx file instead\n",
+            "# \u0410\u0432\u0442\u043E\u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044F \u0438\u0437 editorial_rules.xlsx\n",
+            "# \u041D\u0435 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 xlsx \u0444\u0430\u0439\u043B\n",
+            "#\n",
+            "# \u0424\u043E\u0440\u043C\u0430\u0442\u044B: GREP<Tab>\u043F\u0430\u0442\u0442\u0435\u0440\u043D<Tab>\u0437\u0430\u043C\u0435\u043D\u0430  |  \u043D\u0430\u0439\u0442\u0438<Tab>\u0437\u0430\u043C\u0435\u043D\u0438\u0442\u044C\n",
         ]
 
         for row in ws.iter_rows(min_row=2, values_only=True):
@@ -47,11 +49,16 @@ def main():
             col_a = str(row[0]).strip() if row[0] is not None else ""
             col_b = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
             col_c = str(row[2]).strip() if len(row) > 2 and row[2] is not None else ""
+            col_d = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ""
 
             if not col_b:
                 continue
 
             rule_type = col_a.upper()
+
+            # Add comment line above rule if present
+            if col_d:
+                lines.append(f"# {col_d}\n")
 
             if rule_type == "GREP" and col_c:
                 lines.append(f"GREP\t{col_b}\t{col_c}\n")

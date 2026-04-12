@@ -7,8 +7,9 @@
   // --- Load CommonUtils ---
   var _f = File(SCRIPT_DIR + "/CommonUtils.jsx");
   if (!_f.exists) _f = File(SCRIPT_DIR + "\\CommonUtils.jsx");
-  if (!_f.exists) { alert("CommonUtils.jsx not found."); return; }
-  try { $.evalFile(_f); } catch (e) { alert("Error loading CommonUtils.jsx:\n" + (e.message || e)); return; }
+  if (!_f.exists) { alert("CommonUtils.jsx \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D."); return; }
+  try { $.evalFile(_f); } catch (e) { alert("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 CommonUtils.jsx:\n" + (e.message || e)); return; }
+  if (!$.global.CommonUtils || typeof $.global.CommonUtils.getActiveDocument !== 'function') { alert("CommonUtils.jsx \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D \u043D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u043E."); return; }
   var Utils = $.global.CommonUtils;
   var TEMP_DIR   = Folder.temp.fsName;
   var RUN_ID     = String((new Date()).getTime()) + "_" + Math.floor(Math.random() * 1000000);
