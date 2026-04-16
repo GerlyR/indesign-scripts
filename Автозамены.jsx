@@ -97,37 +97,42 @@
     var count = 0;
     var details = [];
     for (var i = 0; i < rules.length; i++) {
+      var r = rules[i];
+      if (!r || !r.find) continue; // skip malformed rules silently
+      var found = [];
+      var result = null;
+      var isGrep = (r.type === "grep");
       try {
-        var r = rules[i];
-        var found = [];
-        var result;
-        if (r.type === "grep") {
-          // Single pass: set find+change prefs, collect originals, then changeGrep
+        if (isGrep) {
           Utils.resetFindGrep();
-          app.findGrepPreferences.findWhat = r.find;
           try {
-            var hits = story.findGrep();
-            for (var h = 0; h < hits.length; h++) {
-              found.push(String(hits[h].contents));
-            }
-          } catch (e) {}
-          // Apply change without resetting (pattern already set)
-          app.changeGrepPreferences.changeTo = r.replace;
-          try { result = story.changeGrep(); } catch (e) { result = null; }
-          Utils.resetFindGrep();
+            app.findGrepPreferences.findWhat = r.find;
+            try {
+              var hits = story.findGrep();
+              for (var h = 0; h < hits.length; h++) {
+                found.push(String(hits[h].contents));
+              }
+            } catch (e) {}
+            app.changeGrepPreferences.changeTo = r.replace;
+            try { result = story.changeGrep(); } catch (e) { result = null; }
+          } finally {
+            Utils.resetFindGrep();
+          }
         } else {
           Utils.resetFindText();
-          app.findTextPreferences.findWhat = r.find;
           try {
-            var hits = story.findText();
-            for (var h = 0; h < hits.length; h++) {
-              found.push(String(hits[h].contents));
-            }
-          } catch (e) {}
-          // Apply change without resetting (pattern already set)
-          app.changeTextPreferences.changeTo = r.replace;
-          try { result = story.changeText(); } catch (e) { result = null; }
-          Utils.resetFindText();
+            app.findTextPreferences.findWhat = r.find;
+            try {
+              var htxt = story.findText();
+              for (var ht = 0; ht < htxt.length; ht++) {
+                found.push(String(htxt[ht].contents));
+              }
+            } catch (e) {}
+            app.changeTextPreferences.changeTo = r.replace;
+            try { result = story.changeText(); } catch (e) { result = null; }
+          } finally {
+            Utils.resetFindText();
+          }
         }
         if (result && result.length) {
           count += result.length;
@@ -136,7 +141,7 @@
           }
         }
       } catch (e) {
-        details.push("  \u26A0 \u041F\u0440\u0430\u0432\u0438\u043B\u043E #" + (i + 1) + " (" + r.find.substring(0, 30) + "): " + (e.message || e));
+        details.push("  \u26A0 \u041F\u0440\u0430\u0432\u0438\u043B\u043E #" + (i + 1) + " (" + String(r.find).substring(0, 30) + "): " + (e.message || e));
       }
     }
     return { count: count, details: details };

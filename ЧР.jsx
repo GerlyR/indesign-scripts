@@ -214,32 +214,9 @@
 
         // --- Detect signature from end (1 or 2 lines) ---
         Utils.trimTailEmptyParas(story);
-        var sigStartIdx = -1;
-        var sigEndIdx = -1;
-        var pLen = story.paragraphs.length;
-
-        if (pLen >= 2) {
-          try {
-            var lastTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 1]));
-            var prevTxt = Utils.trim(Utils.getParaText(story.paragraphs[pLen - 2]));
-
-            if (Utils.isSignatureCity(lastTxt) && Utils.isSignature(prevTxt)) {
-              sigStartIdx = pLen - 2;
-              sigEndIdx = pLen - 1;
-            } else if (Utils.isSignature(lastTxt)) {
-              sigStartIdx = pLen - 1;
-              sigEndIdx = pLen - 1;
-            }
-          } catch (e) {}
-        } else if (pLen === 1) {
-          try {
-            var onlyTxt = Utils.trim(Utils.getParaText(story.paragraphs[0]));
-            if (Utils.isSignature(onlyTxt)) {
-              sigStartIdx = 0;
-              sigEndIdx = 0;
-            }
-          } catch (e) {}
-        }
+        var sig = Utils.detectSignature(story.paragraphs);
+        var sigStartIdx = sig.sigStartIdx;
+        var sigEndIdx = sig.sigEndIdx;
 
         // Подпись → пж+курсив + правое выравнивание
         if (sigStartIdx >= 0) {

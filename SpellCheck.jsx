@@ -58,15 +58,10 @@
     return String(obj);
   }
 
-  // --- Create color swatch ---
+  // --- Create color swatch (find-or-create) ---
   function getColor(doc, name, r, g, b) {
-    // Check existing
-    for (var i = 0; i < doc.colors.length; i++) {
-      try {
-        if (doc.colors[i].name === name) return doc.colors[i];
-      } catch (e) {}
-    }
-    // Create
+    var existing = Utils.findColorByName(doc, name);
+    if (existing) return existing;
     var c = doc.colors.add();
     c.name = name;
     c.model = ColorModel.PROCESS;
@@ -76,15 +71,18 @@
   }
 
   // --- Extract paragraphs ---
+  // Use .everyItem().contents to fetch all paragraph texts in ONE DOM round-trip
+  // instead of N (story.paragraphs.length) separate accesses.
   function extractParas(story) {
     var out = [];
-    for (var i = 0; i < story.paragraphs.length; i++) {
-      try {
-        var p = story.paragraphs[i];
-        if (!p || !p.isValid) continue;
-        var t = String(p.contents).replace(/\r$/, "");
-        if (t.replace(/[\s\u00A0]+/g, "")) out.push({ idx: i, text: t });
-      } catch (e) {}
+    var texts;
+    try { texts = story.paragraphs.everyItem().contents; } catch (e) { texts = null; }
+    if (!texts) return out;
+    // everyItem().contents returns a string when there's only one paragraph
+    if (typeof texts === "string") texts = [texts];
+    for (var i = 0; i < texts.length; i++) {
+      var t = String(texts[i]).replace(/\r$/, "");
+      if (t.replace(/[\s\u00A0]+/g, "")) out.push({ idx: i, text: t });
     }
     return out;
   }
@@ -136,19 +134,29 @@
   }
 
   // --- Read result ---
+  // Returns { parsed: object|null, rawSnippet: string|null, ioError: string|null }
+  // Caller can distinguish missing file, I/O failure, and parse failure.
   function readResult() {
     var f = File(OUTPUT_FILE);
-    if (!f.exists) return null;
+    if (!f.exists) return { parsed: null, rawSnippet: null, ioError: "missing" };
     f.encoding = "UTF-8";
-    if (!f.open("r")) return null;
-    var s = f.read();
-    f.close();
+    if (!f.open("r")) return { parsed: null, rawSnippet: null, ioError: "locked" };
+    var s = "";
+    try { s = f.read(); } catch (e) { s = ""; }
+    try { f.close(); } catch (e) {}
+    if (!s || !s.replace(/\s+/g, "")) {
+      return { parsed: null, rawSnippet: "", ioError: "empty" };
+    }
     try {
       if (typeof JSON !== "undefined" && JSON.parse) {
-        return JSON.parse(s);
+        return { parsed: JSON.parse(s), rawSnippet: null, ioError: null };
       }
     } catch (e) {}
-    try { return eval("(" + s + ")"); } catch (e2) { return null; }
+    try {
+      return { parsed: eval("(" + s + ")"), rawSnippet: null, ioError: null };
+    } catch (e2) {
+      return { parsed: null, rawSnippet: s.substring(0, 200), ioError: "parse" };
+    }
   }
 
   // --- Annotate inline ---
@@ -241,14 +249,17 @@
     var userPath = prompt("Python \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0443\u0442\u044C \u043A python.exe\n(\u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0434\u043B\u044F \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430 \u043E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u0438):", "C:\\Python311\\python.exe");
     if (userPath) {
       userPath = userPath.replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "");
-      if (File(userPath).exists) {
-        PYTHON_EXE = userPath;
-        // Save for future runs
-        var pf = File(SCRIPT_DIR + "\\python_path.txt");
-        pf.encoding = "UTF-8";
-        if (pf.open("w")) { pf.write(userPath); pf.close(); }
-      } else {
+      var upFile = File(userPath);
+      // Validate: file exists AND basename looks like a python executable
+      // This prevents accidental paths to notepad.exe etc. being stored.
+      var looksLikePython = /[\\\/]python\d*w?\.exe$/i.test(userPath);
+      if (!upFile.exists) {
         alert("\u0424\u0430\u0439\u043B \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: " + userPath);
+      } else if (!looksLikePython) {
+        alert("\u042D\u0442\u043E \u043D\u0435 \u043F\u043E\u0445\u043E\u0436\u0435 \u043D\u0430 python.exe: " + userPath + "\n\u041F\u0443\u0442\u044C \u0434\u043E\u043B\u0436\u0435\u043D \u0437\u0430\u043A\u0430\u043D\u0447\u0438\u0432\u0430\u0442\u044C\u0441\u044F \u043D\u0430 python.exe \u0438\u043B\u0438 python3.exe.");
+      } else {
+        PYTHON_EXE = userPath;
+        Utils.savePythonPath(SCRIPT_DIR, userPath);
       }
     }
   }
@@ -275,14 +286,20 @@
       inf.close();
 
       if (runPython()) {
-        var result = readResult();
-        if (result && !result.error) {
-          matches = result.matches || [];
+        var rr = readResult();
+        if (rr.parsed && !rr.parsed.error) {
+          matches = rr.parsed.matches || [];
           totalMatches = matches.length;
-          totalChecked = result.totalChecked || 0;
-        } else if (result && result.error) {
-          spellError = result.error;
-          if (!$.global.__BATCH_MODE) alert("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438:\n" + result.error);
+          totalChecked = rr.parsed.totalChecked || 0;
+        } else if (rr.parsed && rr.parsed.error) {
+          spellError = rr.parsed.error;
+          if (!$.global.__BATCH_MODE) alert("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438:\n" + rr.parsed.error);
+        } else if (rr.ioError === "parse") {
+          // Worker output was truncated or corrupted — don't silently report "no errors"
+          spellError = "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 JSON \u043E\u0442 worker: " + (rr.rawSnippet || "").substring(0, 120);
+          if (!$.global.__BATCH_MODE) alert(spellError);
+        } else if (rr.ioError === "empty" || rr.ioError === "missing") {
+          spellError = "\u041F\u0443\u0441\u0442\u043E\u0439 \u043E\u0442\u0432\u0435\u0442 \u043E\u0442 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438";
         }
       }
       cleanupTempFiles();

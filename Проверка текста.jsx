@@ -12,16 +12,29 @@
   var s2 = File(dir + "\\SpellCheck.jsx");
   var s1Error = null, s2Error = null;
 
+  // Wrap all sub-scripts in a single undo group so Ctrl+Z reverts everything
   try {
-    if (s1.exists) {
+    app.doScript(function () {
+      if (s1.exists) {
+        try { $.evalFile(s1); } catch (e) { s1Error = e.message || String(e); }
+      }
+      if (s2.exists) {
+        try { $.evalFile(s2); } catch (e) { s2Error = e.message || String(e); }
+      }
+    }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT,
+      "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0442\u0435\u043A\u0441\u0442\u0430");
+  } catch (eBatch) {
+    // doScript itself failed — fall back to direct eval (undo may be partial)
+    if (!s1Error && s1.exists) {
       try { $.evalFile(s1); } catch (e) { s1Error = e.message || String(e); }
     }
-
-    if (s2.exists) {
+    if (!s2Error && s2.exists) {
       try { $.evalFile(s2); } catch (e) { s2Error = e.message || String(e); }
     }
   } finally {
     $.global.__BATCH_MODE = false;
+    // Clean up global result pointers so a subsequent direct run doesn't see stale data
+    // (done after report is built — moved to end of function)
   }
 
   // --- Combined report ---

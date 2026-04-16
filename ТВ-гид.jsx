@@ -34,8 +34,8 @@
 
   // --- Автодетекция шрифта из первой story ---
   var fontInfo = Utils.detectFontVariants(stories[0]);
-  var csBold   = Utils.ensureCharStyleSmart(doc, "tvBold", fontInfo.bold);
-  var csItalic = Utils.ensureCharStyleSmart(doc, "tvItalic", fontInfo.italic);
+  var csBold   = Utils.ensureCharStyleSmart(doc, "tvbold", fontInfo.bold);
+  var csItalic = Utils.ensureCharStyleSmart(doc, "tvitalic", fontInfo.italic);
 
   if (!csBold || !csItalic) {
     alert("Не удалось создать символьные стили.");

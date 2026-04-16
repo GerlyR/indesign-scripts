@@ -446,10 +446,13 @@
     if (cf.exists) {
       cf.encoding = "UTF-8";
       if (cf.open("r")) {
-        // Trim only leading/trailing whitespace — preserve internal spaces in paths
-        var p = cf.read().replace(/^[\r\n\s]+|[\r\n\s]+$/g, "");
+        var raw = cf.read();
         cf.close();
+        // Strip UTF-8 BOM that Notepad adds, then trim whitespace
+        var p = raw.replace(/^\uFEFF/, "").replace(/^[\r\n\s]+|[\r\n\s]+$/g, "");
         if (p && File(p).exists) return p;
+        // Stale cache — file references a path that no longer exists
+        // Fall through to auto-detect; the caller may rewrite the cache
       }
     }
     var vers = ["313", "312", "311", "310", "39", "38"];
@@ -466,6 +469,47 @@
       if (f.exists) return f.fsName;
     }
     return null;
+  };
+
+  /**
+   * Находит цвет по имени в документе. Возвращает Color или null.
+   * Ищет через итерацию, потому что itemByName может вернуть "phantom" объект
+   * с isValid=false даже если цвет отсутствует.
+   * @param {Document} doc
+   * @param {string} name
+   * @returns {Color|null}
+   */
+  Utils.findColorByName = function(doc, name) {
+    if (!doc || !name) return null;
+    try {
+      for (var i = 0; i < doc.colors.length; i++) {
+        try {
+          if (doc.colors[i].name === name) return doc.colors[i];
+        } catch (e) {}
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  /**
+   * Сохраняет путь к python.exe в python_path.txt рядом со скриптом.
+   * Отдельная функция, чтобы логика хранения была в одном месте.
+   * @param {string} scriptDir — папка со скриптом
+   * @param {string} pythonPath — полный путь к python.exe
+   * @returns {boolean} — true если сохранено
+   */
+  Utils.savePythonPath = function(scriptDir, pythonPath) {
+    if (!scriptDir || !pythonPath) return false;
+    try {
+      var pf = File(scriptDir + "\\python_path.txt");
+      pf.encoding = "UTF-8";
+      if (!pf.open("w")) return false;
+      pf.write(pythonPath);
+      pf.close();
+      return true;
+    } catch (e) {
+      return false;
+    }
   };
 
   /**
@@ -685,13 +729,8 @@
    */
   Utils.detectFontVariants = function(story) {
     var result = { bold: null, italic: null, boldItalic: null, family: null, baseStyle: null };
-    // Cache by story ID to avoid re-scanning app.fonts (can be 2000+ entries)
-    try {
-      var cacheKey = "dfv_" + story.id;
-      if ($.global.__dfvCache && $.global.__dfvCache[cacheKey]) {
-        return $.global.__dfvCache[cacheKey];
-      }
-    } catch (e) {}
+    if (!$.global.__dfvCache) $.global.__dfvCache = {};
+
     try {
       var samplePara = null;
       for (var pi = 0; pi < story.paragraphs.length && pi < 5; pi++) {
@@ -712,6 +751,12 @@
       var baseWidth = "";
       var widthMatch = result.baseStyle.match(/(Condensed|Cond|Narrow|Compressed|Extended|Wide)/i);
       if (widthMatch) baseWidth = widthMatch[1].toLowerCase();
+
+      // Cache by family+width — multiple stories with the same font share the scan
+      var cacheKey = "dfv|" + result.family + "|" + baseWidth;
+      if ($.global.__dfvCache[cacheKey]) {
+        return $.global.__dfvCache[cacheKey];
+      }
 
       var candidates = { bold: [], italic: [], boldItalic: [] };
       var allFonts = app.fonts;
@@ -757,11 +802,9 @@
       result.bold = pickBest(candidates.bold);
       result.italic = pickBest(candidates.italic);
       result.boldItalic = pickBest(candidates.boldItalic);
-    } catch (e) {}
-    // Store in cache
-    try {
-      if (!$.global.__dfvCache) $.global.__dfvCache = {};
-      $.global.__dfvCache["dfv_" + story.id] = result;
+
+      // Store in cache keyed by family+width (computed above)
+      try { $.global.__dfvCache[cacheKey] = result; } catch (e) {}
     } catch (e) {}
     return result;
   };

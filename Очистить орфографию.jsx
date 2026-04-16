@@ -33,67 +33,31 @@
     } catch (e) {}
     Utils.resetFindGrep();
 
-    // Step 2: Reset red-colored text (error marks)
-    var red = null;
-    for (var i = 0; i < doc.colors.length; i++) {
-      try {
-        if (doc.colors[i].name === "_SC_Red") { red = doc.colors[i]; break; }
-      } catch (e) {}
-    }
-    if (red) {
+    // Steps 2-4: Reset colored text back to Black (+ remove underline on red)
+    var black = doc.swatches.itemByName("Black");
+    var hasBlack = (black && black.isValid);
+
+    function resetColorRun(colorName, alsoRemoveUnderline) {
+      var color = Utils.findColorByName(doc, colorName);
+      if (!color || !hasBlack) return 0;
       Utils.resetFindGrep();
+      var n = 0;
       try {
         app.findGrepPreferences.findWhat = ".+";
-        app.findGrepPreferences.fillColor = red;
-        var black = doc.swatches.itemByName("Black");
+        app.findGrepPreferences.fillColor = color;
         app.changeGrepPreferences.fillColor = black;
-        app.changeGrepPreferences.underline = false;
+        if (alsoRemoveUnderline) app.changeGrepPreferences.underline = false;
         app.changeGrepPreferences.changeTo = "$0";
-        var r2 = story.changeGrep();
-        if (r2 && r2.length) removed += r2.length;
+        var r = story.changeGrep();
+        if (r && r.length) n = r.length;
       } catch (e) {}
       Utils.resetFindGrep();
+      return n;
     }
 
-    // Step 3: Reset green-colored text (suggestions that weren't removed)
-    var green = null;
-    for (var i = 0; i < doc.colors.length; i++) {
-      try {
-        if (doc.colors[i].name === "_SC_Green") { green = doc.colors[i]; break; }
-      } catch (e) {}
-    }
-    if (green) {
-      Utils.resetFindGrep();
-      try {
-        app.findGrepPreferences.findWhat = ".+";
-        app.findGrepPreferences.fillColor = green;
-        var black = doc.swatches.itemByName("Black");
-        app.changeGrepPreferences.fillColor = black;
-        app.changeGrepPreferences.changeTo = "$0";
-        story.changeGrep();
-      } catch (e) {}
-      Utils.resetFindGrep();
-    }
-
-    // Step 4: Reset gray-colored text (arrows)
-    var gray = null;
-    for (var i = 0; i < doc.colors.length; i++) {
-      try {
-        if (doc.colors[i].name === "_SC_Gray") { gray = doc.colors[i]; break; }
-      } catch (e) {}
-    }
-    if (gray) {
-      Utils.resetFindGrep();
-      try {
-        app.findGrepPreferences.findWhat = ".+";
-        app.findGrepPreferences.fillColor = gray;
-        var black = doc.swatches.itemByName("Black");
-        app.changeGrepPreferences.fillColor = black;
-        app.changeGrepPreferences.changeTo = "$0";
-        story.changeGrep();
-      } catch (e) {}
-      Utils.resetFindGrep();
-    }
+    removed += resetColorRun("_SC_Red", true);
+    resetColorRun("_SC_Green", false);
+    resetColorRun("_SC_Gray", false);
   }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT,
     "\u041E\u0447\u0438\u0441\u0442\u043A\u0430 \u043E\u0440\u0444\u043E\u0433\u0440\u0430\u0444\u0438\u0438");
 
