@@ -53,17 +53,25 @@ def main():
             "# \u0410\u0432\u0442\u043E\u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044F \u0438\u0437 editorial_rules.xlsx\n",
             "# \u041D\u0435 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 xlsx \u0444\u0430\u0439\u043B\n",
             "#\n",
-            "# \u0424\u043E\u0440\u043C\u0430\u0442\u044B: GREP<Tab>\u043F\u0430\u0442\u0442\u0435\u0440\u043D<Tab>\u0437\u0430\u043C\u0435\u043D\u0430  |  \u043D\u0430\u0439\u0442\u0438<Tab>\u0437\u0430\u043C\u0435\u043D\u0438\u0442\u044C\n",
+            "# \u0424\u043E\u0440\u043C\u0430\u0442\u044B (Tab-separated):\n",
+            "#   GREP<Tab>\u043F\u0430\u0442\u0442\u0435\u0440\u043D<Tab>\u0437\u0430\u043C\u0435\u043D\u0430[<Tab>\u0441\u0442\u0438\u043B\u044C \u0430\u0431\u0437\u0430\u0446\u0430]\n",
+            "#   \u043D\u0430\u0439\u0442\u0438<Tab>\u0437\u0430\u043C\u0435\u043D\u0438\u0442\u044C[<Tab>\u0441\u0442\u0438\u043B\u044C \u0430\u0431\u0437\u0430\u0446\u0430]\n",
         ]
+
+        def _cell(row, idx):
+            if idx >= len(row) or row[idx] is None:
+                return ""
+            return str(row[idx]).strip()
 
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row or len(row) < 2:
                 continue
 
-            col_a = str(row[0]).strip() if row[0] is not None else ""
-            col_b = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-            col_c = str(row[2]).strip() if len(row) > 2 and row[2] is not None else ""
-            col_d = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ""
+            col_a = _cell(row, 0)   # Type
+            col_b = _cell(row, 1)   # Find
+            col_c = _cell(row, 2)   # Replace
+            col_d = _cell(row, 3)   # Comment (not written as field, only as # line)
+            col_e = _cell(row, 4)   # Paragraph style (scope) — optional
 
             if not col_b:
                 continue
@@ -74,10 +82,14 @@ def main():
             if col_d:
                 lines.append(f"# {col_d}\n")
 
+            # Scope field gets appended as trailing tab-separated column when non-empty.
+            # Empty scope → rule applies globally (no trailing tab).
+            scope_suffix = f"\t{col_e}" if col_e else ""
+
             if rule_type == "GREP" and col_c:
-                lines.append(f"GREP\t{col_b}\t{col_c}\n")
+                lines.append(f"GREP\t{col_b}\t{col_c}{scope_suffix}\n")
             elif rule_type in ("TEXT", "\u0422\u0415\u041A\u0421\u0422", "") and col_b and col_c:
-                lines.append(f"{col_b}\t{col_c}\n")
+                lines.append(f"{col_b}\t{col_c}{scope_suffix}\n")
     finally:
         wb.close()
 

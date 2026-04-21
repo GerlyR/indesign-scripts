@@ -80,33 +80,101 @@
     var rules = [];
     for (var i = 0; i < lines.length; i++) {
       var parts = lines[i].split("\t");
+      // Optional 4th field: paragraph style name (scope) — apply rule only to
+      // paragraphs with this style. Empty/missing = apply globally.
       if (parts.length >= 3 && parts[0].toUpperCase() === "GREP" && parts[1] && parts[2]) {
-        rules.push({ type: "grep", find: parts[1], replace: parts[2] });
+        rules.push({
+          type: "grep",
+          find: parts[1],
+          replace: parts[2],
+          paraStyle: (parts[3] || "").replace(/^\s+|\s+$/g, "") || null
+        });
       } else if (parts[0] && parts[0].toUpperCase() === "GREP") {
         // GREP line with missing replacement — skip, don't fall through to text
         continue;
       } else if (parts.length >= 2 && parts[0] && parts[1]) {
-        rules.push({ type: "text", find: parts[0], replace: parts[1] });
+        rules.push({
+          type: "text",
+          find: parts[0],
+          replace: parts[1],
+          paraStyle: (parts[2] || "").replace(/^\s+|\s+$/g, "") || null
+        });
       }
     }
     return rules;
   }
 
+  // Resolve paragraph style by name (including nested group paths like "Group:Style").
+  // Returns the style object or null.
+  // @param doc — Document (required); if you pass a MasterSpread/Spread by mistake, returns null
+  // @param name — flat name ("rubrica") or group-path ("Группа:rubrica")
+  function resolveParaStyle(doc, name) {
+    if (!doc || !name || !doc.paragraphStyles) return null;
+    // Flat lookup first (works for most cases, including names with literal "/")
+    try {
+      var ps = doc.paragraphStyles.itemByName(name);
+      if (ps && ps.isValid) return ps;
+    } catch (e) {}
+    // Group-path lookup: only attempt if name contains separators
+    if (!/[:\/]/.test(String(name))) return null;
+    try {
+      var parts = String(name).split(/[:\/]/);
+      var container = doc;
+      for (var i = 0; i < parts.length; i++) {
+        var segName = parts[i];
+        if (i < parts.length - 1) {
+          var grp = container.paragraphStyleGroups.itemByName(segName);
+          if (!grp || !grp.isValid) return null;
+          container = grp;
+        } else {
+          var ps2 = container.paragraphStyles.itemByName(segName);
+          if (ps2 && ps2.isValid) return ps2;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
   // --- Apply editorial auto-replacements (single-pass: find+change in one GREP call) ---
-  function applyEditorialRules(story, rules) {
+  // @param story — Story to process
+  // @param rules — array from loadEditorialRules()
+  // @param doc   — Document object (passed explicitly; story.parent not reliable for master-spread stories)
+  function applyEditorialRules(story, rules, doc) {
     var count = 0;
     var details = [];
+    // Cache resolved style objects — lookup is expensive, same style repeats
+    var styleCache = {};
+    // Track missing scopes so we report each only once in the details log
+    var reportedMissingScopes = {};
+
     for (var i = 0; i < rules.length; i++) {
       var r = rules[i];
       if (!r || !r.find) continue; // skip malformed rules silently
       var found = [];
       var result = null;
       var isGrep = (r.type === "grep");
+      var scopeStyle = null;
+      if (r.paraStyle) {
+        if (!styleCache.hasOwnProperty(r.paraStyle)) {
+          styleCache[r.paraStyle] = resolveParaStyle(doc, r.paraStyle);
+        }
+        scopeStyle = styleCache[r.paraStyle];
+        if (!scopeStyle) {
+          // Scope style not found — inform the editor ONCE per unique scope,
+          // then skip all rules with this scope
+          if (!reportedMissingScopes[r.paraStyle]) {
+            details.push("  \u2139 \u0421\u0442\u0438\u043B\u044C \u00AB" + r.paraStyle + "\u00BB \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u2014 \u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0441 \u044D\u0442\u0438\u043C scope \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u044B");
+            reportedMissingScopes[r.paraStyle] = true;
+          }
+          continue;
+        }
+      }
       try {
         if (isGrep) {
           Utils.resetFindGrep();
           try {
             app.findGrepPreferences.findWhat = r.find;
+            if (scopeStyle) app.findGrepPreferences.appliedParagraphStyle = scopeStyle;
             try {
               var hits = story.findGrep();
               for (var h = 0; h < hits.length; h++) {
@@ -122,6 +190,7 @@
           Utils.resetFindText();
           try {
             app.findTextPreferences.findWhat = r.find;
+            if (scopeStyle) app.findTextPreferences.appliedParagraphStyle = scopeStyle;
             try {
               var htxt = story.findText();
               for (var ht = 0; ht < htxt.length; ht++) {
@@ -136,8 +205,9 @@
         }
         if (result && result.length) {
           count += result.length;
+          var scopeLabel = r.paraStyle ? (" [" + r.paraStyle + "]") : "";
           for (var d = 0; d < found.length; d++) {
-            details.push("  \u00AB" + found[d] + "\u00BB \u2192 \u00AB" + r.replace + "\u00BB");
+            details.push("  \u00AB" + found[d] + "\u00BB \u2192 \u00AB" + r.replace + "\u00BB" + scopeLabel);
           }
         }
       } catch (e) {
@@ -286,7 +356,7 @@
   // Step 1: Auto-replacements (separate undo)
   if (editRules.length) {
     app.doScript(function () {
-      editResult = applyEditorialRules(story, editRules);
+      editResult = applyEditorialRules(story, editRules, doc);
     }, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT,
       "\u0410\u0432\u0442\u043E\u0437\u0430\u043C\u0435\u043D\u044B");
   }
