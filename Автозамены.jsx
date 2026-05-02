@@ -228,10 +228,15 @@
   }
 
   // --- Check obscene line breaks and fix with noBreak ---
+  // Optimization: line texts fetched in a single .everyItem().contents per frame
+  // instead of N separate DOM accesses. End/start fragment scanning runs on JS
+  // strings. DOM-level character access only happens for matched lines (rare).
+  // For a 4-column 300-line article: was ~3000 DOM calls in scan phase, now ~1.
   function checkObsceneBreaks(doc, story, patterns) {
     if (!patterns.length) return { count: 0, words: [], hasOverset: false };
 
     var letterRe = /[a-zA-Z\u0410-\u044F\u0451\u0401]/;
+    var fragRe = /[a-zA-Z\u0410-\u044F\u0451\u0401\-]/;
     var wordCharRe = /[a-zA-Z\u0410-\u044F\u0451\u0401\u00AD]/;
     var fixRanges = [];
     var hasOverset = false;
@@ -243,35 +248,38 @@
       try { if (frame.overflows) hasOverset = true; } catch (e) {}
 
       var frameLines = frame.lines;
-      for (var li = 0; li < frameLines.length - 1; li++) {
+      var nLines = frameLines.length;
+      if (nLines < 2) continue;
+
+      // Bulk fetch ALL line texts in one DOM call (vs N for a 300-line frame)
+      var lineTexts;
+      try { lineTexts = frameLines.everyItem().contents; } catch (e) { continue; }
+      if (typeof lineTexts === "string") lineTexts = [lineTexts];
+      if (!lineTexts || lineTexts.length < 2) continue;
+
+      for (var li = 0; li < nLines - 1; li++) {
         try {
-          var curLine = frameLines[li];
-          var nxtLine = frameLines[li + 1];
-          if (!curLine.isValid || !nxtLine.isValid) continue;
-          if (curLine.characters.length === 0 || nxtLine.characters.length === 0) continue;
+          var curText = String(lineTexts[li] || "").replace(/[\u00AD]/g, "");
+          var nxtText = String(lineTexts[li + 1] || "").replace(/[\u00AD]/g, "");
+          if (!curText.length || !nxtText.length) continue;
 
-          var lastCh = String(curLine.characters[-1].contents);
-          var firstCh = String(nxtLine.characters[0].contents);
+          // Fast cheap checks on JS strings: last char of cur, first of next
+          var lastCh = curText.charAt(curText.length - 1);
+          var firstCh = nxtText.charAt(0);
+          if (!letterRe.test(lastCh) || !letterRe.test(firstCh)) continue;
 
-          if (!lastCh.match(letterRe) || !firstCh.match(letterRe)) continue;
-
-          var lineText = String(curLine.contents).replace(/[\u00AD]/g, "");
+          // Compute end-fragment on JS string (was N DOM calls)
           var endFrag = "";
-          for (var k = lineText.length - 1; k >= 0; k--) {
-            var ch = lineText.charAt(k);
-            if (ch.match(/[a-zA-Z\u0410-\u044F\u0451\u0401\-]/)) {
-              endFrag = ch + endFrag;
-            } else { break; }
+          for (var k = curText.length - 1; k >= 0; k--) {
+            var ch = curText.charAt(k);
+            if (fragRe.test(ch)) { endFrag = ch + endFrag; } else { break; }
           }
           endFrag = endFrag.replace(/[\-]+$/, "");
 
-          var nextText = String(nxtLine.contents).replace(/[\u00AD]/g, "");
           var startFrag = "";
-          for (var k2 = 0; k2 < nextText.length; k2++) {
-            var ch2 = nextText.charAt(k2);
-            if (ch2.match(/[a-zA-Z\u0410-\u044F\u0451\u0401\-]/)) {
-              startFrag += ch2;
-            } else { break; }
+          for (var k2 = 0; k2 < nxtText.length; k2++) {
+            var ch2 = nxtText.charAt(k2);
+            if (fragRe.test(ch2)) { startFrag += ch2; } else { break; }
           }
           startFrag = startFrag.replace(/^[\-]+/, "");
 
@@ -289,34 +297,39 @@
               found = true; break;
             }
           }
+          if (!found) continue;
 
-          if (found) {
-            var lc = curLine.characters;
-            var wStart = lc.length - 1;
-            while (wStart > 0) {
-              var c = String(lc[wStart - 1].contents);
-              if (c.match(wordCharRe)) { wStart--; } else { break; }
-            }
+          // Match found \u2014 now we DO need DOM access for the actual character range.
+          // This branch runs only on real matches (rare), so per-char lookup is OK.
+          var curLine = frameLines[li];
+          var nxtLine = frameLines[li + 1];
+          if (!curLine.isValid || !nxtLine.isValid) continue;
+          var lc = curLine.characters;
+          var nc = nxtLine.characters;
+          if (lc.length === 0 || nc.length === 0) continue;
 
-            var nc = nxtLine.characters;
-            var wEnd = 0;
-            while (wEnd < nc.length - 1) {
-              var c2 = String(nc[wEnd + 1].contents);
-              if (c2.match(wordCharRe)) { wEnd++; } else { break; }
-            }
-
-            var wordText = "";
-            for (var wi = wStart; wi < lc.length; wi++) {
-              wordText += String(lc[wi].contents);
-            }
-            wordText = wordText.replace(/[\u00AD\-]+$/, "");
-            for (var wi2 = 0; wi2 <= wEnd; wi2++) {
-              wordText += String(nc[wi2].contents);
-            }
-            wordText = wordText.replace(/[\u00AD]/g, "");
-
-            fixRanges.push({ s: lc[wStart], e: nc[wEnd], word: wordText });
+          var wStart = lc.length - 1;
+          while (wStart > 0) {
+            var c = String(lc[wStart - 1].contents);
+            if (c.match(wordCharRe)) { wStart--; } else { break; }
           }
+          var wEnd = 0;
+          while (wEnd < nc.length - 1) {
+            var c2 = String(nc[wEnd + 1].contents);
+            if (c2.match(wordCharRe)) { wEnd++; } else { break; }
+          }
+
+          var wordText = "";
+          for (var wi = wStart; wi < lc.length; wi++) {
+            wordText += String(lc[wi].contents);
+          }
+          wordText = wordText.replace(/[\u00AD\-]+$/, "");
+          for (var wi2 = 0; wi2 <= wEnd; wi2++) {
+            wordText += String(nc[wi2].contents);
+          }
+          wordText = wordText.replace(/[\u00AD]/g, "");
+
+          fixRanges.push({ s: lc[wStart], e: nc[wEnd], word: wordText });
         } catch (e) {}
       }
     }

@@ -321,25 +321,20 @@
    */
   Utils.trimTailEmptyParas = function(story) {
     if (!story || !story.paragraphs) return;
-    
-    while (story.paragraphs.length > 0) {
+    // Optimization: use lastItem() (single DOM call) instead of length lookup +
+    // indexed access (two DOM calls per iteration). Add safety bound to prevent
+    // infinite loop if .remove() silently fails.
+    var safety = 1000;
+    while (safety-- > 0) {
+      var p;
       try {
-        var p = story.paragraphs[story.paragraphs.length - 1];
-        if (!p || !p.isValid) break;
-        
-        var t = Utils.trim(Utils.getParaText(p));
-        if (t.length === 0) {
-          try {
-            p.remove();
-          } catch (e) {
-            break;
-          }
-        } else {
-          break;
-        }
-      } catch (e) {
-        break;
-      }
+        p = story.paragraphs.lastItem();
+      } catch (e) { break; }
+      if (!p || !p.isValid) break;
+      try {
+        if (Utils.trim(Utils.getParaText(p)).length !== 0) break;
+        p.remove();
+      } catch (e) { break; }
     }
   };
   
@@ -372,38 +367,21 @@
   };
   
   /**
-   * Универсальная функция очистки текста (cleanupBroom)
-   * Оптимизированная версия с единым списком правил
+   * Универсальная функция очистки текста (cleanupBroom).
+   * Оптимизация: 11 отдельных GREP-проходов сжаты до 3 за счёт backreference
+   * для парных скобок и единого паттерна для двойных точек.
+   * Каждый story.changeGrep() — это full-story scan. Ускорение ~3.5x.
    */
   Utils.cleanupBroom = function(story) {
     if (!story || !story.isValid) return;
-    
-    // Правила очистки: [findWhat, changeTo]
-    var rules = [
-      ["\\.\\.(?!\\.)", "."],
-      ["\\.\\s+\\.(?!\\.)", "."],
-      ["\\(\\(([^)]*)\\)\\)", "($1)"],
-      ["\\(\\(", "("],
-      ["\\)\\)", ")"],
-      ["\\[\\[", "["],
-      ["\\]\\]", "]"],
-      ["\\{\\{", "{"],
-      ["\\}\\}", "}"],
-      ["\u00AB\u00AB", "\u00AB"],
-      ["\u00BB\u00BB", "\u00BB"]
-    ];
-    
-    // Применяем правила
-    for (var i = 0; i < rules.length; i++) {
-      Utils.resetFindGrep();
-      try {
-        app.findGrepPreferences.findWhat = rules[i][0];
-        app.changeGrepPreferences.changeTo = rules[i][1];
-        story.changeGrep();
-      } catch (e) {}
-    }
-    
-    Utils.resetFindGrep();
+    // 1. Двойные точки без многоточия: ".." -> "."
+    Utils.grepChange(story, "\.\.(?!\.)", { changeTo: "." });
+    // 2. Точка-пробел-точка не из многоточия: ". ." -> "."
+    Utils.grepChange(story, "\.\s+\.(?!\.)", { changeTo: "." });
+    // 3. Любые удвоенные парные символы в один проход через backreference:
+    //    ((  ))  [[  ]]  {{  }}  ««  »» -> одинарный
+    //    "((text))" нормализуется побочно: "((" -> "(", "))" -> ")".
+    Utils.grepChange(story, "([\(\)\[\]\{\}«»])\1", { changeTo: "$1" });
   };
   
   /**

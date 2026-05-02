@@ -237,13 +237,24 @@
         var inAfterMatch = false; // находимся ли после "ПОСЛЕ МАТЧА"
         var inQuestion = false;   // продолжение многострочного вопроса
 
-        for (var i2 = 0; i2 < story.paragraphs.length; i2++) {
+        // Optimization: snapshot paragraphs collection + bulk-fetch contents in
+        // ONE DOM call instead of N separate String(par.contents) accesses.
+        // Loop body only sets paragraphStyle / charStyle — does not mutate
+        // paragraph count, so cached length stays valid.
+        var allParas = story.paragraphs;
+        var totalParas = allParas.length;
+        var allTexts;
+        try { allTexts = allParas.everyItem().contents; } catch (e) { allTexts = null; }
+        if (typeof allTexts === "string") allTexts = [allTexts];
+        if (!allTexts) allTexts = [];
+
+        for (var i2 = 0; i2 < totalParas; i2++) {
           if (sigStartIdx >= 0 && i2 >= sigStartIdx && i2 <= sigEndIdx) continue;
           try {
-            var par = story.paragraphs[i2];
+            var par = allParas[i2];
             if (!par || !par.isValid) continue;
 
-            var txt = Utils.trim(String(par.contents).replace(/\r$/, ""));
+            var txt = Utils.trim(String(allTexts[i2] || "").replace(/\r$/, ""));
             if (!txt) continue;
 
             // --- "ПОСЛЕ МАТЧА" → Press стиль ---
@@ -311,28 +322,28 @@
         }
 
         // --- Блок статистики 8/8pt ---
-        // Ищем от строки счёта до строки с "зрител" включительно
+        // Ищем от строки счёта до строки с "зрител" включительно.
+        // Используем кешированные allTexts/allParas — без DOM lookup в цикле.
         if (scoreIdx >= 0) {
           var statsStart = scoreIdx;
           var statsEnd = -1;
-          for (var st = scoreIdx; st < Math.min(scoreIdx + 20, story.paragraphs.length); st++) {
-            try {
-              var stTxt = String(story.paragraphs[st].contents);
-              if (/зрител/i.test(stTxt)) {
-                statsEnd = st;
-                break;
-              }
-            } catch (e) {}
+          var statsLimit = Math.min(scoreIdx + 20, totalParas);
+          for (var st = scoreIdx; st < statsLimit; st++) {
+            if (/зрител/i.test(String(allTexts[st] || ""))) {
+              statsEnd = st;
+              break;
+            }
           }
           if (statsEnd >= statsStart) {
             for (var sb = statsStart; sb <= statsEnd; sb++) {
               try {
-                var sp = story.paragraphs[sb];
-                if (sp && sp.isValid && sp.characters.length > 0) {
-                  var srng = sp.characters.itemByRange(0, sp.characters.length - 1);
-                  if (srng && srng.isValid) {
-                    try { srng.pointSize = 8; } catch (e) {}
-                    try { srng.leading = 8; } catch (e) {}
+                var sp = allParas[sb];
+                if (sp && sp.isValid) {
+                  // texts[0] — single DOM call вместо itemByRange + два .pointSize/.leading сетов
+                  var spText = sp.texts[0];
+                  if (spText && spText.isValid) {
+                    try { spText.pointSize = 8; } catch (e) {}
+                    try { spText.leading = 8; } catch (e) {}
                   }
                 }
               } catch (e) {}
