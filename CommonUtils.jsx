@@ -450,47 +450,6 @@
   };
 
   /**
-   * Находит цвет по имени в документе. Возвращает Color или null.
-   * Ищет через итерацию, потому что itemByName может вернуть "phantom" объект
-   * с isValid=false даже если цвет отсутствует.
-   * @param {Document} doc
-   * @param {string} name
-   * @returns {Color|null}
-   */
-  Utils.findColorByName = function(doc, name) {
-    if (!doc || !name) return null;
-    try {
-      for (var i = 0; i < doc.colors.length; i++) {
-        try {
-          if (doc.colors[i].name === name) return doc.colors[i];
-        } catch (e) {}
-      }
-    } catch (e) {}
-    return null;
-  };
-
-  /**
-   * Сохраняет путь к python.exe в python_path.txt рядом со скриптом.
-   * Отдельная функция, чтобы логика хранения была в одном месте.
-   * @param {string} scriptDir — папка со скриптом
-   * @param {string} pythonPath — полный путь к python.exe
-   * @returns {boolean} — true если сохранено
-   */
-  Utils.savePythonPath = function(scriptDir, pythonPath) {
-    if (!scriptDir || !pythonPath) return false;
-    try {
-      var pf = File(scriptDir + "\\python_path.txt");
-      pf.encoding = "UTF-8";
-      if (!pf.open("w")) return false;
-      pf.write(pythonPath);
-      pf.close();
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
-
-  /**
    * Получает папку Scripts Panel
    */
   Utils.getScriptsPanelFolder = function() {
